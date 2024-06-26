@@ -108,11 +108,11 @@ public class IVFRN {
             dos.writeInt(C);
             dos.writeInt(B);
 
-            for (int i = 0; i < N; i++) {
+            for (int i = 0; i < C; i++) {
                 dos.writeInt(start[i]);
             }
 
-            for (int i = 0; i < N; i++) {
+            for (int i = 0; i < C; i++) {
                 dos.writeInt(len[i]);
             }
 
@@ -167,11 +167,11 @@ public class IVFRN {
             float[] distToC = new float[N];
             float[] x0 = new float[N];
 
-            for (int i = 0; i < N; i++) {
+            for (int i = 0; i < C; i++) {
                 start[i] = dis.readInt();
             }
 
-            for (int i = 0; i < N; i++) {
+            for (int i = 0; i < C; i++) {
                 len[i] = dis.readInt();
             }
 

@@ -57,7 +57,7 @@ public class IVF {
         // FIXME: this is too slow
         // FIXME: FUTURE - cleaner loop
         int iterations = 0;
-        int maxIterations = 3000;
+        int maxIterations = 1000;
         while (true) {
             stable = true;
 
