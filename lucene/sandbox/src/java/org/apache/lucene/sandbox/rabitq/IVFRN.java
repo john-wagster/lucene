@@ -30,8 +30,8 @@ public class IVFRN {
 
     private static int B;
     private static int D;
-    private static float fac_norm = (float) Utils.constSqrt(1.0 * B);
-    private static float max_x1 = (float) (1.9 / Utils.constSqrt(1.0 * B-1.0));
+    private static float fac_norm;
+    private static float max_x1;
 
     public IVFRN(float[][] X, float[][] centroids, float[] distToCentroid, float[] _x0, int[] clusterId, long[][] binary) {
 
@@ -39,6 +39,9 @@ public class IVFRN {
 
         D = X[0].length;
         B = (D + 63) / 64 * 64;
+
+        this.fac_norm = (float) Utils.constSqrt(1.0 * B);
+        this.max_x1 = (float) (1.9 / Utils.constSqrt(1.0 * B-1.0));
 
         N = X.length;
         C = centroids.length;
@@ -86,6 +89,10 @@ public class IVFRN {
         this.D = d;
         this.C = c;
         this.B = b;
+
+        this.fac_norm = (float) Utils.constSqrt(1.0 * B);
+        this.max_x1 = (float) (1.9 / Utils.constSqrt(1.0 * B-1.0));
+
         this.centroids = centroids;
         this.data = data;
         this.binaryCode = binaryCode;
@@ -156,6 +163,9 @@ public class IVFRN {
             int D = dis.readInt();
             int C = dis.readInt();
             int B = dis.readInt();
+
+            IVFRN.fac_norm = (float) Utils.constSqrt(1.0 * B);
+            IVFRN.max_x1 = (float) (1.9 / Utils.constSqrt(1.0 * B-1.0));
 
             float[][] centroids = new float[C][B];
             float[][] data = new float[N][D];

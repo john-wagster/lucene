@@ -61,11 +61,20 @@ public class SpaceUtils {
         return quantQuery;
     }
 
-    private static long reverseBits(int v) {
-        return ((v & 1) << 31 | (v & 2) >> 1) |
-                ((v & 4) >> 2 | (v & 8) << 3) |
-                ((v & 16) >> 4 | (v & 32) << 5) |
-                ((v & 64) >> 6 | (v & 128) << 7);
+    private static long reverseBits(int n) {
+        n = (n >>> 1) & 0x55555555 | (n << 1) & 0xaaaaaaaa;
+        n = (n >>> 2) & 0x33333333 | (n << 2) & 0xcccccccc;
+        n = (n >>> 4) & 0x0f0f0f0f | (n << 4) & 0xf0f0f0f0;
+        n = (n >>> 8) & 0x00ff00ff | (n << 8) & 0xff00ff00;
+        n = (n >>> 16) & 0x0000ffff | (n << 16) & 0xffff0000;
+        return Integer.toUnsignedLong(n);
+    }
+
+    public static void main(String[] args) {
+        long v = reverseBits((int) reverseBits(Integer.MIN_VALUE));
+        System.out.println(Integer.MIN_VALUE);
+        System.out.println(Integer.MAX_VALUE);
+        System.out.println(v);
     }
 
     public static float[] range(float[] q, float[] c) {
