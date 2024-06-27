@@ -210,14 +210,21 @@ public class IVFRN {
                 u[i] = (float) Math.random();
             }
 
+            // FIXME: FUTURE - had to flatten this to get it working
+            long[] flattendedBinaryCode = MatrixUtils.flatten(binaryCode);
+
+            int nextBinCodeStart = 0;
             Factor[] fac = new Factor[N];
             for (int i = 0; i < N; i++) {
+                // FIXME: FUTURE - clean this up -- this is unnecessary
+                long[] subFlatBinCodes = Arrays.copyOfRange(flattendedBinaryCode, nextBinCodeStart, i * B/64+B/64);
                 double x_x0 = distToC[i] / x0[i];
                 float sqrX = distToC[i] * distToC[i];
                 float error = (float) (2.0 * max_x1 * Math.sqrt(x_x0 * x_x0 - distToC[i] * distToC[i]));
-                float factorPPC = (float) (-2.0 / fac_norm * x_x0 * ((float) SpaceUtils.popcount(binaryCode[i]) * 2.0 - B));
+                float factorPPC = (float) (-2.0 / fac_norm * x_x0 * ((float) SpaceUtils.popcount(subFlatBinCodes) * 2.0 - B));
                 float factorIP = (float) (-2.0 / fac_norm * x_x0);
                 fac[i] = new Factor(sqrX, error, factorPPC, factorIP);
+                nextBinCodeStart += B / 64;
             }
 
             return new IVFRN(N, D, C, B, centroids, data, binaryCode, start, len, id, distToC, x0, u, fac);
@@ -235,7 +242,7 @@ public class IVFRN {
             centroidDist[i] = new Result(VectorUtils.squareDistance(rdQuery, centroids[i]), i);
         }
 
-        Arrays.sort(centroidDist, 0, nProbe);
+        Arrays.sort(centroidDist, 0, Math.min(nProbe, centroidDist.length));
 
         for (int pb = 0; pb < nProbe; pb++) {
             int c = centroidDist[pb].c();
