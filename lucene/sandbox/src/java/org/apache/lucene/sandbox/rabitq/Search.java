@@ -53,7 +53,8 @@ public class Search {
     }
 
     public static void test(int k, float[][] Q, float[][] RandQ, float[][] X, int[][] G, IVFRN ivf, int B_QUERY) {
-        int nprobes = 300; // FIXME: FUTURE - hardcoded
+        // FIXME: CAN NOT BE GREATER THAN THE NUMBER OF CENTROIDS!
+        int nprobes = 8; // FIXME: FUTURE - hardcoded
 
         float totalUsertime = 0;
         float totalRatio = 0;

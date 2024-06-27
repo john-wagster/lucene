@@ -252,7 +252,9 @@ public class IVFRN {
             centroidDist[i] = new Result(VectorUtils.squareDistance(rdQuery, centroids[i]), i);
         }
 
-        Arrays.sort(centroidDist, 0, Math.min(nProbe, centroidDist.length));
+        assert nProbe < centroidDist.length;
+
+        Arrays.sort(centroidDist, 0, nProbe);
 
         for (int pb = 0; pb < nProbe; pb++) {
             int c = centroidDist[pb].c();
@@ -294,11 +296,12 @@ public class IVFRN {
         // FIXME: FUTURE - had to flatten this to get it working
         long[] flattendedBinaryCode = MatrixUtils.flatten(binaryCode);
 
+        int counter = 0;
         int nextBinCodeStart = 0;
         for (int i = 0; i < it; i++) {
             for (int j = 0; j < SIZE; j++) {
                 // FIXME: FUTURE - clean this up -- this is unnecessary
-                long[] subFlatBinCodes = Arrays.copyOfRange(flattendedBinaryCode, nextBinCodeStart, j * B/64+B/64);
+                long[] subFlatBinCodes = Arrays.copyOfRange(flattendedBinaryCode, nextBinCodeStart, counter * B/64+B/64);
                 float tmp_dist = (fac[nextC].sqrX()) + sqr_y + fac[nextC].factorPPC() * vl +
                         (SpaceUtils.ipByteBin(quantQuery, subFlatBinCodes, B_QUERY, B) * 2 - sumq) *
                                 (fac[nextC].factorIP()) * width;
@@ -306,6 +309,7 @@ public class IVFRN {
                 float error_bound = y * (fac[nextC].error());
                 res[j] = tmp_dist - error_bound;
                 nextC++;
+                counter++;
             }
 
             for (int j = 0; j < SIZE; j++) {
