@@ -6,6 +6,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.PriorityQueue;
 
 
@@ -254,7 +255,7 @@ public class IVFRN {
 
         assert nProbe < centroidDist.length;
 
-        Arrays.sort(centroidDist, 0, nProbe);
+        Arrays.sort(centroidDist, 0, nProbe, Comparator.comparingDouble(Result::sqrY));
 
         for (int pb = 0; pb < nProbe; pb++) {
             int c = centroidDist[pb].c();
@@ -302,7 +303,7 @@ public class IVFRN {
             for (int j = 0; j < SIZE; j++) {
                 // FIXME: FUTURE - clean this up -- this is unnecessary
                 long[] subFlatBinCodes = Arrays.copyOfRange(flattendedBinaryCode, nextBinCodeStart, counter * B/64+B/64);
-                float tmp_dist = (fac[nextC].sqrX()) + sqr_y + fac[nextC].factorPPC() * vl +
+                float tmp_dist = fac[nextC].sqrX() + sqr_y + fac[nextC].factorPPC() * vl +
                         (SpaceUtils.ipByteBin(quantQuery, subFlatBinCodes, B_QUERY, B) * 2 - sumq) *
                                 (fac[nextC].factorIP()) * width;
                 nextBinCodeStart += B / 64;

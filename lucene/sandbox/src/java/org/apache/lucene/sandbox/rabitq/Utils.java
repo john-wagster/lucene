@@ -25,7 +25,7 @@ public class Utils {
         int validK = 0;
         while (!gt.isEmpty()) {
             if (gt.peek().sqrY() > 1e-5) {
-                ret += Math.sqrt((float) KNNs.peek().sqrY() / gt.peek().sqrY());
+                ret += Math.sqrt(KNNs.peek().sqrY() / gt.peek().sqrY());
                 validK++;
             }
             gt.remove();

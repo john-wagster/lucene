@@ -18,7 +18,8 @@ public class Search {
         int kTotalClusters = Integer.parseInt(args[2]);
         int dimensions = Integer.parseInt(args[3]);
         int B_QUERY = Integer.parseInt(args[4]);
-        String resultPath = args[5];  // eg "/Users/jwagster/Desktop/gist1m/ivfrn_output/"
+        int subk = Integer.parseInt(args[5]);
+        String resultPath = args[6];  // eg "/Users/jwagster/Desktop/gist1m/ivfrn_output/"
 
         // FIXME: FUTURE - clean up these constants
         int C = kTotalClusters;
@@ -48,13 +49,15 @@ public class Search {
         IVFRN ivfrn = IVFRN.load(indexPath);
         float[][] RandQ = MatrixUtils.multiply(Q, P);
 
-        test(kTotalClusters, Q, RandQ, X, G, ivfrn, B_QUERY);
+        test(subk, Q, RandQ, X, G, ivfrn, B_QUERY);
 
     }
 
     public static void test(int k, float[][] Q, float[][] RandQ, float[][] X, int[][] G, IVFRN ivf, int B_QUERY) {
         // FIXME: CAN NOT BE GREATER THAN THE NUMBER OF CENTROIDS!
-        int nprobes = 8; // FIXME: FUTURE - hardcoded
+        int nprobes = 300; // FIXME: FUTURE - hardcoded
+
+        assert nprobes <= k;
 
         float totalUsertime = 0;
         float totalRatio = 0;

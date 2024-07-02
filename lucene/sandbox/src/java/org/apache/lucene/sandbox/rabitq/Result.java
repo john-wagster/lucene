@@ -4,13 +4,16 @@ record Result(float sqrY, int c) implements Comparable {
     @Override
     public int compareTo(Object obj) {
         if(obj instanceof Result) {
-            if ( this.sqrY == ((Result) obj).sqrY) {
-                return 0;
-            }
-            else if(this.sqrY < ((Result) obj).sqrY) {
-                return -1;
-            } else {
+            if (Float.isNaN(((Result) obj).sqrY)) {
                 return 1;
+            } else {
+                if (this.sqrY == ((Result) obj).sqrY) {
+                    return 0;
+                } else if (this.sqrY < ((Result) obj).sqrY) {
+                    return -1;
+                } else {
+                    return 1;
+                }
             }
         } else {
             return 1;

@@ -90,16 +90,18 @@ public class IVF {
             for(int i = 0; i < centroids.length; i++) {
                 Set<Integer> vectorIds = centroidToVectors.get(i);
 
+                // FIXME: FUTURE - this produces a potential set of NaN vectors when no vectors are near the centroid; exclude those centroids?
                 int dimensions = vectors[0].length;
-                float[] sums = new float[dimensions];
+                double[] sums = new double[dimensions];
                 for (int j = 0; j < vectorIds.size(); j++) {
                     for (int a = 0; a < dimensions; a++) {
                         sums[a] += vectors[j][a];
                     }
                 }
                 for(int j = 0; j < sums.length; j++) {
-                    centroids[i].getVector()[j] = sums[j] / vectorIds.size();
+                    centroids[i].getVector()[j] = (float) (sums[j] / (float) vectorIds.size());
                 }
+                assert centroids[i].getVector()[0] == Float.NaN;
             }
 
             if(iterations % 150 == 0) {
