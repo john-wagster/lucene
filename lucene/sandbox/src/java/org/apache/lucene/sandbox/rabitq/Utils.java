@@ -34,6 +34,4 @@ public class Utils {
         if (validK == 0) return k;
         return (float) (ret / validK * k);
     }
-
-
 }

@@ -1,4 +1,4 @@
 package org.apache.lucene.sandbox.rabitq;
 
-record SearchResult(float distToCentroid, int clusterId) {
+public record SearchResult(float distToCentroid, int clusterId) {
 }

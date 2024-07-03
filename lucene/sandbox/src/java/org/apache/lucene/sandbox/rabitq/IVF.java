@@ -12,10 +12,10 @@ import java.util.stream.IntStream;
 
 public class IVF {
 
-    private static int seed = 1;
-    private static Random rand = new Random(seed);
+    private static final int seed = 1;
+    private static final Random rand = new Random(seed);
 
-    private int totalClusters;
+    private final int totalClusters;
     private Centroid[] centroids;
 
     public IVF(int clusters) {
@@ -43,8 +43,7 @@ public class IVF {
         }
 
         // iterate through all vectors until the centroids stop moving around
-        boolean stable = false;
-        float epsilon = 0.01f;
+        boolean stable;
 
         // FIXME: FUTURE - replace w logging
         System.out.println("iterating over centroid positions");
@@ -101,10 +100,11 @@ public class IVF {
                 for(int j = 0; j < sums.length; j++) {
                     centroids[i].getVector()[j] = (float) (sums[j] / (float) vectorIds.size());
                 }
-                assert centroids[i].getVector()[0] == Float.NaN;
+                assert !Float.isNaN(centroids[i].getVector()[0]);
             }
 
             if(iterations % 150 == 0) {
+                // FIXME: replace w logging
                 System.out.print(".");
             }
             iterations++;

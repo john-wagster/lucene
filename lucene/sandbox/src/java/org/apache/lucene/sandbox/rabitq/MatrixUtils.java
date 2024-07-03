@@ -118,23 +118,14 @@ public class MatrixUtils {
         return result;
     }
 
-    public static float[][] subset(float[][] a, int[] indicies) {
+    public static float[][] indexInto(float[][] a, int[] indicies) {
         // FIXME: FUTURE - check error conditions
         // FIXME: FUTURE - speed this up Arrays.copyOf?
-        Arrays.sort(indicies); // FIXME: FUTURE - assume this is sorted coming in and/or deal with unsorted this is expensive
+        assert a.length == indicies.length;
         float[][] subMatrix = new float[indicies.length][a[0].length];
-        int nextI = indicies[0];
-        int nextIdex = 0;
-        for(int i = 0; i < a.length; i++) {
-            if (nextI == i) {
-                for (int j = 0; j < a[i].length; j++) {
-                    subMatrix[nextIdex][j] = a[i][j];
-                }
-                nextIdex++;
-                if(nextIdex >= indicies.length) {
-                    break;
-                }
-                nextI = indicies[nextIdex];
+        for(int i = 0; i < indicies.length; i++) {
+            for (int j = 0; j < a[0].length; j++) {
+                subMatrix[i][j] = a[indicies[i]][j];
             }
         }
         return subMatrix;
@@ -297,33 +288,33 @@ public class MatrixUtils {
 
         int totalValues = B >> 6;
         int vectorSize = (binXPFlattened.length / 64) / totalValues;
-        long[][] allBinary = new long[totalValues][vectorSize];
 
-        int a = 0;
-        int b = 0;
+        long[] binaryData = new long[vectorSize * totalValues];
+
+        int idx = 0;
         for(int h = 0; h < binXPFlattened.length / 64; h++) {
             long result = 0L;
             int q = 0;
             for (int i = 7; i >= 0; i--) {
-                long dresult = 0L;
-                int r = 0;
                 for (int j = 7; j >= 0; j--) {
                     if (binXPFlattened[h * 64 + i * 8 + j]) {
                         result |= (1L << q);
-                        dresult |= (1L << r);
                     }
                     q++;
-                    r++;
                 }
             }
 
-            allBinary[a][b] = result;
+            binaryData[idx] = result;
+            idx++;
+        }
 
-            if ( h % vectorSize != vectorSize-1) {
-                b++;
-            } else {
-                a++;
-                b=0;
+        long[][] allBinary = new long[vectorSize][totalValues];
+
+        idx = 0;
+        for(int i = 0; i < vectorSize; i++) {
+            for(int j = 0; j < totalValues; j++) {
+                allBinary[i][j] = binaryData[idx];
+                idx++;
             }
         }
 

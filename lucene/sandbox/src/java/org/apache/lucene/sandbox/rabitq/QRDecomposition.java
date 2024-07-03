@@ -1,7 +1,7 @@
 package org.apache.lucene.sandbox.rabitq;
 
 // FIXME: FUTURE - evaluate pulling in apache commons Math (this is a rough pull from that codebase; apache licensed)
-class QRDecomposition {
+public class QRDecomposition {
     private float[][] qrt;
     private float[] rDiag;
     private float[][] cachedQ;

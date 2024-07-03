@@ -29,10 +29,10 @@ public class IVFRN {
     public float[][] centroids;          // N * B floats (not N * D), note that the centroids should be randomized
     public float[][] data;               // N * D floats, note that the datas are not randomized
 
-    private static int B;
-    private static int D;
-    private static float fac_norm;
-    private static float max_x1;
+    private final int B;
+    private final int D;
+
+    private float distK = Float.MAX_VALUE;
 
     public IVFRN(float[][] X, float[][] centroids, float[] distToCentroid, float[] _x0, int[] clusterId, long[][] binary) {
 
@@ -41,14 +41,8 @@ public class IVFRN {
         D = X[0].length;
         B = (D + 63) / 64 * 64;
 
-        this.fac_norm = (float) Utils.constSqrt(1.0 * B);
-        this.max_x1 = (float) (1.9 / Utils.constSqrt(1.0 * B-1.0));
-
         N = X.length;
         C = centroids.length;
-
-        // Check if B is a multiple of 64
-        assert (B % 64 == 0);
 
         // Check if B is greater than or equal to D
         assert (B >= D);
@@ -90,9 +84,6 @@ public class IVFRN {
         this.D = d;
         this.C = c;
         this.B = b;
-
-        this.fac_norm = (float) Utils.constSqrt(1.0 * B);
-        this.max_x1 = (float) (1.9 / Utils.constSqrt(1.0 * B-1.0));
 
         this.centroids = centroids;
         this.data = data;
@@ -148,8 +139,8 @@ public class IVFRN {
                 }
             }
 
-            for (int i = 0; i < B / 64; i++) {
-                for (int j = 0; j < N; j++) {
+            for (int i = 0; i < N; i++) {
+                for (int j = 0; j < B / 64; j++) {
                     dos.writeLong(binaryCode[i][j]);
                 }
             }
@@ -165,13 +156,13 @@ public class IVFRN {
             int C = dis.readInt();
             int B = dis.readInt();
 
-            IVFRN.fac_norm = (float) Utils.constSqrt(1.0 * B);
-            IVFRN.max_x1 = (float) (1.9 / Utils.constSqrt(1.0 * B-1.0));
+            float fac_norm = (float) Utils.constSqrt(1.0 * B);
+            float max_x1 = (float) (1.9 / Utils.constSqrt(1.0 * B-1.0));
 
             float[][] centroids = new float[C][B];
             float[][] data = new float[N][D];
 
-            long[][] binaryCode = new long[B / 64][N];
+            long[][] binaryCode = new long[N][B / 64];
             int[] start = new int[C];
             int[] len = new int[C];
             int[] id = new int[N];
@@ -210,8 +201,8 @@ public class IVFRN {
                 }
             }
 
-            for (int i = 0; i < B / 64; i++) {
-                for (int j = 0; j < N; j++) {
+            for (int i = 0; i < N; i++) {
+                for (int j = 0; j < B / 64; j++) {
                     binaryCode[i][j] = dis.readLong();
                 }
             }
@@ -232,7 +223,7 @@ public class IVFRN {
                 double x_x0 = distToC[i] / x0[i];
                 float sqrX = distToC[i] * distToC[i];
                 float error = (float) (2.0 * max_x1 * Math.sqrt(x_x0 * x_x0 - distToC[i] * distToC[i]));
-                float factorPPC = (float) (-2.0 / fac_norm * x_x0 * ((float) SpaceUtils.popcount(subFlatBinCodes) * 2.0 - B));
+                float factorPPC = (float) (-2.0 / fac_norm * x_x0 * ((float) SpaceUtils.popcount(subFlatBinCodes, B) * 2.0 - B));
                 float factorIP = (float) (-2.0 / fac_norm * x_x0);
                 fac[i] = new Factor(sqrX, error, factorPPC, factorIP);
                 nextBinCodeStart += B / 64;
@@ -242,8 +233,10 @@ public class IVFRN {
         }
     }
 
-    public PriorityQueue<Result> search(float[] query, float[] rdQuery, int k, int nProbe, float distK, int B_QUERY) {
+    public PriorityQueue<Result> search(float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) {
         //FIXME: FUTURE - implement fast scan and do a comparison
+
+        this.distK = Float.MAX_VALUE;
 
         PriorityQueue<Result> knns = new PriorityQueue<>();
 
@@ -274,16 +267,13 @@ public class IVFRN {
             long[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
 
             int startC = start[c];
-            scan(knns, distK, k,
-                    quantQuery, startC, len[c],
-                    sqrY, vl, width, sumQ,
-                    query, B_QUERY, B);
+            scan(knns, k, quantQuery, startC, len[c], sqrY, vl, width, sumQ, query, B_QUERY, B);
         }
 
         return knns;
     }
 
-    public void scan(PriorityQueue<Result> KNNs, float distK, int k, long[] quantQuery, int startC, int len,
+    public void scan(PriorityQueue<Result> KNNs, int k, long[] quantQuery, int startC, int len,
                      float sqr_y, float vl, float width, float sumq, float[] query, int B_QUERY, int B) {
         int SIZE = 32;
         float y = (float) Math.sqrt(sqr_y);

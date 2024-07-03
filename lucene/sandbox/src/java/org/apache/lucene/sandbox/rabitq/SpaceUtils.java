@@ -1,16 +1,12 @@
 package org.apache.lucene.sandbox.rabitq;
 
-import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.IntBuffer;
-import java.util.Arrays;
 
 public class SpaceUtils {
 
-    public static int popcount(long[] d) {
+    public static int popcount(long[] d, int B) {
         int ret = 0;
-        for (int i = 0; i < d.length / 8; i++) {
+        for (int i = 0; i < B / 64; i++) {
             ret += Long.bitCount(d[i]);
         }
         return ret;
@@ -26,35 +22,6 @@ public class SpaceUtils {
             ret += subRet << i;
         }
         return ret;
-    }
-
-    public static void main(String[] args) {
-
-        System.out.println((byte)(26 << 4));
-
-        byte[] q = { 0x1a, (byte) 0x2b, (byte) 0x3c, (byte) 0x4d, (byte) 0x5e, (byte) 0x6f, (byte) 0x7a, (byte) 0x8b,
-                (byte) 0x9c, (byte) 0xad, (byte) 0xbe, (byte) 0xcf, (byte) 0xda, (byte) 0xeb, (byte) 0xfc, (byte) 0x0d,
-                (byte) 0x1e, (byte) 0x2f, (byte) 0x3a, (byte) 0x4b, (byte) 0x5c, (byte) 0x6d, (byte) 0x7e, (byte) 0x8f,
-                (byte) 0x90, (byte) 0xa1, (byte) 0xb2, (byte) 0xc3, (byte) 0xd4, (byte) 0xe5, (byte) 0xf6, (byte) 0x07,
-                (byte) 0x18, (byte) 0x29, (byte) 0x3a, (byte) 0x4b, (byte) 0x5c, (byte) 0x6d, (byte) 0x7e, (byte) 0x8f,
-                (byte) 0x90, (byte) 0xa1, (byte) 0xb2, (byte) 0xc3, (byte) 0xd4, (byte) 0xe5, (byte) 0xf6, (byte) 0x07,
-                (byte) 0x18, (byte) 0x29, (byte) 0x3a, (byte) 0x4b, (byte) 0x5c, (byte) 0x6d, (byte) 0x7e, (byte) 0x8f,
-                (byte) 0x90, (byte) 0xa1, (byte) 0xb2, (byte) 0xc3, (byte) 0xd4, (byte) 0xe5, (byte) 0xf6, (byte) 0x07,
-                (byte) 0x18, (byte) 0x29, (byte) 0x3a, (byte) 0x4b, (byte) 0x5c, (byte) 0x6d, (byte) 0x7e, (byte) 0x8f,
-                (byte) 0x90, (byte) 0xa1, (byte) 0xb2, (byte) 0xc3, (byte) 0xd4, (byte) 0xe5, (byte) 0xf6, (byte) 0x07,
-                (byte) 0x18, (byte) 0x29, (byte) 0x3a, (byte) 0x4b, (byte) 0x5c, (byte) 0x6d, (byte) 0x7e, (byte) 0x8f,
-                (byte) 0x90, (byte) 0xa1, (byte) 0xb2, (byte) 0xc3, (byte) 0xd4, (byte) 0xe5, (byte) 0xf6, (byte) 0x07,
-                (byte) 0x18, (byte) 0x29, (byte) 0x3a, (byte) 0x4b, (byte) 0x5c, (byte) 0x6d, (byte) 0x7e, (byte) 0x8f,
-                (byte) 0x90, (byte) 0xa1, (byte) 0xb2, (byte) 0xc3, (byte) 0xd4, (byte) 0xe5, (byte) 0xf6, (byte) 0x07,
-                (byte) 0x18, (byte) 0x29, (byte) 0x3a, (byte) 0x4b, (byte) 0x5c, (byte) 0x6d, (byte) 0x7e, (byte) 0x8f,
-                (byte) 0x90, (byte) 0xa1, (byte) 0xb2, (byte) 0xc3, (byte) 0xd4, (byte) 0xe5, (byte) 0xf6, (byte) 0x07 };
-//        long[] tq = new long[q.length / 8]; // Output buffer
-//        Arrays.fill(tq, 0);
-        long[] tq = transposeBin(q, 128, 4);
-        for(int i = 0; i < tq.length; i++) {
-            System.out.print(Long.toUnsignedString(tq[i]) + " ");
-        }
-        // 6148914691236517205 6148914691236517205 14933077865681597235 3689348814741910323 4392081725200469775 1085102592571150095 18446742978476179200 18374966859414961920
     }
 
     public static long[] transposeBin(byte[] q, int D, int B_QUERY) {

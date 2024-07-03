@@ -119,7 +119,7 @@ public class IOUtils {
             }
 
             byte[] vector = new byte[dimensions * 8];
-            bb = ByteBuffer.wrap(vector);
+            bb = ByteBuffer.wrap(vector).order(ByteOrder.LITTLE_ENDIAN);
             fc.read(bb);
             bb.flip();
             bb.asLongBuffer().get(data[i], 0, dimensions);

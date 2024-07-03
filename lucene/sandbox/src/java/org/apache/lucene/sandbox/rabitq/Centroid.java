@@ -1,6 +1,6 @@
 package org.apache.lucene.sandbox.rabitq;
 
-class Centroid {
+public class Centroid {
 
     private int id;
     private float[] vector;
