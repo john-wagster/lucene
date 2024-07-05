@@ -16,11 +16,9 @@ public class MatrixUtils {
         float[][] C = new float[n][dC];
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < dC; j++) {
-                float sum = 0;
                 for (int k = 0; k < dA; k++) {
-                    sum += a[i][k] * b[k][j];
+                    C[i][j] += a[i][k] * b[k][j];
                 }
-                C[i][j] = sum;
             }
         }
 

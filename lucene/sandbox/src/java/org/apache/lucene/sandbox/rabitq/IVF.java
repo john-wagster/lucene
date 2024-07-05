@@ -89,6 +89,10 @@ public class IVF {
             for(int i = 0; i < centroids.length; i++) {
                 Set<Integer> vectorIds = centroidToVectors.get(i);
 
+                if(vectorIds.isEmpty()) {
+                    continue;
+                }
+
                 // FIXME: FUTURE - this produces a potential set of NaN vectors when no vectors are near the centroid; exclude those centroids?
                 int dimensions = vectors[0].length;
                 double[] sums = new double[dimensions];

@@ -22,7 +22,7 @@ public class Index {
 
         // FIXME: FUTURE - switch these to log statements
         System.out.println("Clustering - " + dataset);
-//        clusterWithIVF(source, dataset, numCentroids);
+        //clusterWithIVF(source, dataset, numCentroids);
 
         // FIXME: FUTURE - switch these to log statements
         System.out.println("Generating subspaces - " + dataset);
@@ -112,6 +112,7 @@ public class Index {
         Path RNPath = Paths.get(new File(path, "RandNet_C" + numCentroids + "_B" + B + ".ivecs").getAbsolutePath());
         Path x0Path = Paths.get(new File(path, "x0_C" + numCentroids + "_B" + B + ".fvecs").getAbsolutePath());
 
+        // FIXME: BRING THIS BACK! -- hardcoding a known ortho matrix for now
 //        float[][] P = getOrthogonalMatrix(MAX_BD);
         float[][] P = new float[MAX_BD][MAX_BD];
         String data = new String(Files.readAllBytes(Paths.get("/Users/jwagster/workspace/query-ollama/transport.out")));

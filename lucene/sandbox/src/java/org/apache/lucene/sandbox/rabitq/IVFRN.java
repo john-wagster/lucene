@@ -5,6 +5,9 @@ import java.io.DataOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.PriorityQueue;
@@ -147,6 +150,112 @@ public class IVFRN {
         }
     }
 
+    public static IVFRN loadFromCStyle(String filename) throws IOException {
+        try (FileInputStream fis = new FileInputStream(filename);
+            FileChannel fc = fis.getChannel(); ) {
+
+            ByteBuffer bb = ByteBuffer.allocate(4*4).order(ByteOrder.LITTLE_ENDIAN);
+            fc.read(bb);
+            bb.flip();
+            int N = bb.getInt();
+            int D = bb.getInt();
+            int C = bb.getInt();
+            int B = bb.getInt();
+
+            float fac_norm = (float) Utils.constSqrt(1.0 * B);
+            float max_x1 = (float) (1.9 / Utils.constSqrt(1.0 * B-1.0));
+
+            float[][] centroids = new float[C][B];
+            float[][] data = new float[N][D];
+
+            long[][] binaryCode = new long[N][B / 64];
+            int[] start = new int[C];
+            int[] len = new int[C];
+            int[] id = new int[N];
+            float[] distToC = new float[N];
+            float[] x0 = new float[N];
+
+            bb = ByteBuffer.allocate(C*4).order(ByteOrder.LITTLE_ENDIAN);
+            fc.read(bb);
+            bb.flip();
+            for (int i = 0; i < C; i++) {
+                start[i] = bb.getInt();
+            }
+
+            bb = ByteBuffer.allocate(C*4).order(ByteOrder.LITTLE_ENDIAN);
+            fc.read(bb);
+            bb.flip();
+            for (int i = 0; i < C; i++) {
+                len[i] = bb.getInt();
+            }
+
+            bb = ByteBuffer.allocate(N*4).order(ByteOrder.LITTLE_ENDIAN);
+            fc.read(bb);
+            bb.flip();
+            for (int i = 0; i < N; i++) {
+                id[i] = bb.getInt();
+            }
+
+            bb = ByteBuffer.allocate(N*4).order(ByteOrder.LITTLE_ENDIAN);
+            fc.read(bb);
+            bb.flip();
+            for (int i = 0; i < N; i++) {
+                distToC[i] = bb.getFloat();
+            }
+
+            bb = ByteBuffer.allocate(N*4).order(ByteOrder.LITTLE_ENDIAN);
+            fc.read(bb);
+            bb.flip();
+            for (int i = 0; i < N; i++) {
+                x0[i] = bb.getFloat();
+            }
+
+            bb = ByteBuffer.allocate(C*B*4).order(ByteOrder.LITTLE_ENDIAN);
+            fc.read(bb);
+            bb.flip();
+            for (int i = 0; i < C; i++) {
+                for (int j = 0; j < B; j++) {
+                    centroids[i][j] = bb.getFloat();
+                }
+            }
+
+            bb = ByteBuffer.allocate(N*D*4).order(ByteOrder.LITTLE_ENDIAN);
+            fc.read(bb);
+            bb.flip();
+            for (int i = 0; i < N; i++) {
+                for (int j = 0; j < D; j++) {
+                    data[i][j] = bb.getFloat();
+                }
+            }
+
+            bb = ByteBuffer.allocate(N*(B/64)*8).order(ByteOrder.LITTLE_ENDIAN);
+            fc.read(bb);
+            bb.flip();
+            for (int i = 0; i < N; i++) {
+                for (int j = 0; j < B / 64; j++) {
+                    binaryCode[i][j] = bb.getLong();
+                }
+            }
+
+            float[] u = new float[B];
+            for (int i = 0; i < B; i++) {
+                u[i] = (float) Math.random();
+            }
+
+            Factor[] fac = new Factor[N];
+            for (int i = 0; i < N; i++) {
+                double x_x0 = distToC[i] / x0[i];
+                float sqrX = distToC[i] * distToC[i];
+                float error = (float) (2.0 * max_x1 * Math.sqrt(x_x0 * x_x0 - distToC[i] * distToC[i]));
+                float factorPPC = (float) (-2.0 / fac_norm * x_x0 * ((float) SpaceUtils.popcount(binaryCode[i], B) * 2.0 - B));
+                float factorIP = (float) (-2.0 / fac_norm * x_x0);
+                fac[i] = new Factor(sqrX, error, factorPPC, factorIP);
+            }
+
+            return new IVFRN(N, D, C, B, centroids, data, binaryCode, start, len, id, distToC, x0, u, fac);
+        }
+    }
+
     public static IVFRN load(String filename) throws IOException {
         try (FileInputStream fis = new FileInputStream(filename);
              DataInputStream dis = new DataInputStream(fis) ) {
@@ -212,21 +321,14 @@ public class IVFRN {
                 u[i] = (float) Math.random();
             }
 
-            // FIXME: FUTURE - had to flatten this to get it working
-            long[] flattendedBinaryCode = MatrixUtils.flatten(binaryCode);
-
-            int nextBinCodeStart = 0;
             Factor[] fac = new Factor[N];
             for (int i = 0; i < N; i++) {
-                // FIXME: FUTURE - clean this up -- this is unnecessary
-                long[] subFlatBinCodes = Arrays.copyOfRange(flattendedBinaryCode, nextBinCodeStart, i * B/64+B/64);
                 double x_x0 = distToC[i] / x0[i];
                 float sqrX = distToC[i] * distToC[i];
                 float error = (float) (2.0 * max_x1 * Math.sqrt(x_x0 * x_x0 - distToC[i] * distToC[i]));
-                float factorPPC = (float) (-2.0 / fac_norm * x_x0 * ((float) SpaceUtils.popcount(subFlatBinCodes, B) * 2.0 - B));
+                float factorPPC = (float) (-2.0 / fac_norm * x_x0 * ((float) SpaceUtils.popcount(binaryCode[i], B) * 2.0 - B));
                 float factorIP = (float) (-2.0 / fac_norm * x_x0);
                 fac[i] = new Factor(sqrX, error, factorPPC, factorIP);
-                nextBinCodeStart += B / 64;
             }
 
             return new IVFRN(N, D, C, B, centroids, data, binaryCode, start, len, id, distToC, x0, u, fac);
@@ -248,11 +350,16 @@ public class IVFRN {
 
         assert nProbe < centroidDist.length;
 
-        Arrays.sort(centroidDist, 0, nProbe, Comparator.comparingDouble(Result::sqrY));
+        // FIXME: FUTURE - do a partial sort
+        Arrays.sort(centroidDist, Comparator.comparingDouble(Result::sqrY));
 
         for (int pb = 0; pb < nProbe; pb++) {
             int c = centroidDist[pb].c();
             float sqrY = centroidDist[pb].sqrY();
+
+            if(!Float.isFinite(sqrY)) {
+                continue;
+            }
 
             // Preprocess the residual query and the quantized query
             float[] v = SpaceUtils.range(rdQuery, centroids[c]);
@@ -280,68 +387,64 @@ public class IVFRN {
         float[] res = new float[SIZE];
         int it = len / SIZE;
 
-        int nextC = startC;
-        int dataC = startC;
-        int idC = startC;
-
-        // FIXME: FUTURE - had to flatten this to get it working
-        long[] flattendedBinaryCode = MatrixUtils.flatten(binaryCode);
-
-        int counter = 0;
-        int nextBinCodeStart = 0;
+        int facCounter = startC;
+        int dataCounter = startC;
+        int idCounter = startC;
+        int bCounter = 0;
         for (int i = 0; i < it; i++) {
             for (int j = 0; j < SIZE; j++) {
-                // FIXME: FUTURE - clean this up -- this is unnecessary
-                long[] subFlatBinCodes = Arrays.copyOfRange(flattendedBinaryCode, nextBinCodeStart, counter * B/64+B/64);
-                float tmp_dist = fac[nextC].sqrX() + sqr_y + fac[nextC].factorPPC() * vl +
-                        (SpaceUtils.ipByteBin(quantQuery, subFlatBinCodes, B_QUERY, B) * 2 - sumq) *
-                                (fac[nextC].factorIP()) * width;
-                nextBinCodeStart += B / 64;
-                float error_bound = y * (fac[nextC].error());
+                float tmp_dist = fac[facCounter].sqrX() + sqr_y + fac[facCounter].factorPPC() * vl +
+                        (SpaceUtils.ipByteBin(quantQuery, binaryCode[bCounter], B_QUERY, B) * 2 - sumq) *
+                                fac[facCounter].factorIP() * width;
+                float error_bound = y * (fac[facCounter].error());
                 res[j] = tmp_dist - error_bound;
-                nextC++;
-                counter++;
+                bCounter++;
+                facCounter++;
             }
 
             for (int j = 0; j < SIZE; j++) {
                 if (res[j] < distK) {
-                    float gt_dist = VectorUtils.squareDistance(query, data[dataC]);
+                    float gt_dist = VectorUtils.squareDistance(query, data[dataCounter]);
                     if (gt_dist < distK) {
-                        KNNs.add(new Result(gt_dist, id[idC]));
-                        if (KNNs.size() > k) KNNs.remove();
-                        if (KNNs.size() == k) distK = KNNs.peek().sqrY();
+                        KNNs.add(new Result(gt_dist, id[idCounter]));
+                        if (KNNs.size() > k) {
+                            KNNs.remove();
+                        }
+                        if (KNNs.size() == k) {
+                            distK = KNNs.peek().sqrY();
+                        }
                     }
                 }
-                dataC++;
-                idC++;
+                dataCounter++;
+                idCounter++;
             }
         }
 
-        // FIXME: FUTURE - had to flatten this to get it working
-        flattendedBinaryCode = MatrixUtils.flatten(binaryCode);
-
-        nextBinCodeStart = 0;
         for (int i = it * SIZE, j=0; i < len; i++, j++) {
-            long[] subFlatBinCodes = Arrays.copyOfRange(flattendedBinaryCode, nextBinCodeStart, j * B/64+B/64);
-            float tmpDist = (fac[nextC].sqrX()) + sqr_y + fac[nextC].factorPPC() * vl +
-                    (SpaceUtils.ipByteBin(quantQuery, subFlatBinCodes, B_QUERY, B) * 2 - sumq) * (fac[nextC].factorIP()) * width;
-            float errorBound = y * (fac[nextC].error());
+            float tmpDist = (fac[facCounter].sqrX()) + sqr_y + fac[facCounter].factorPPC() * vl +
+                    (SpaceUtils.ipByteBin(quantQuery, binaryCode[bCounter], B_QUERY, B) * 2 - sumq) *
+                            fac[facCounter].factorIP() * width;
+            float errorBound = y * (fac[facCounter].error());
             res[j] = tmpDist - errorBound;
-            nextC++;
-            nextBinCodeStart += B / 64;
+            facCounter++;
+            bCounter++;
         }
 
         for (int i = it * SIZE, j=0; i < len; i++, j++) {
             if (res[j] < distK) {
-                float gt_dist = VectorUtils.squareDistance(query, data[dataC]);
+                float gt_dist = VectorUtils.squareDistance(query, data[dataCounter]);
                 if (gt_dist < distK) {
-                    KNNs.add(new Result(gt_dist, id[idC]));
-                    if (KNNs.size() > k) KNNs.remove();
-                    if (KNNs.size() == k) distK = KNNs.peek().sqrY();
+                    KNNs.add(new Result(gt_dist, id[idCounter]));
+                    if (KNNs.size() > k) {
+                        KNNs.remove();
+                    }
+                    if (KNNs.size() == k) {
+                        distK = KNNs.peek().sqrY();
+                    }
                 }
             }
-            dataC++;
-            idC++;
+            dataCounter++;
+            idCounter++;
         }
     }
 }
