@@ -44,7 +44,8 @@ public class Search {
         writer.write(Q.toString() + "\n");
         writer.close();
 
-        IVFRN ivfrn = IVFRN.loadFromCStyle(indexPath);
+//        IVFRN ivfrn = IVFRN.loadFromCStyle(indexPath);
+        IVFRN ivfrn = IVFRN.load(indexPath);
         float[][] RandQ = MatrixUtils.multiply(Q, P);
 
         test(Q, RandQ, X, G, ivfrn, k, B_QUERY);

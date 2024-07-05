@@ -216,9 +216,10 @@ public class MatrixUtils {
             }
             magnitude = Math.sqrt(magnitude);
 
-            if (magnitude == 0) {
-                throw new IllegalArgumentException("Cannot normalize a vector of length zero.");
-            }
+            // FIXME: not good; sometimes this needs to be 0
+//            if (magnitude == 0) {
+//                throw new IllegalArgumentException("Cannot normalize a vector of length zero.");
+//            }
 
             normalized[h][0] = (float) magnitude;
         }

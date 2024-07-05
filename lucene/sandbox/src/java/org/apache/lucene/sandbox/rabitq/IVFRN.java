@@ -77,8 +77,14 @@ public class IVFRN {
         }
 
         this.centroids = centroids;
-        data = X;
-        binaryCode = binary;
+
+        this.data = new float[N][X[0].length];
+        this.binaryCode = new long[N][B/64];
+        for(int i = 0; i < N; i++) {
+            int x = id[i];
+            data[i] = X[x];
+            binaryCode[i] = binary[x];
+        }
     }
 
     private IVFRN(int n, int d, int c, int b, float[][] centroids, float[][] data, long[][] binaryCode, int[] start,
@@ -318,7 +324,8 @@ public class IVFRN {
 
             float[] u = new float[B];
             for (int i = 0; i < B; i++) {
-                u[i] = (float) Math.random();
+                //u[i] = (float) Math.random();
+                u[i] = 0.5f;
             }
 
             Factor[] fac = new Factor[N];
@@ -340,7 +347,7 @@ public class IVFRN {
 
         this.distK = Float.MAX_VALUE;
 
-        PriorityQueue<Result> knns = new PriorityQueue<>();
+        PriorityQueue<Result> knns = new PriorityQueue<>(Comparator.reverseOrder());
 
         // Find out the nearest N_{probe} centroids to the query vector.
         Result[] centroidDist = new Result[C];
@@ -353,6 +360,7 @@ public class IVFRN {
         // FIXME: FUTURE - do a partial sort
         Arrays.sort(centroidDist, Comparator.comparingDouble(Result::sqrY));
 
+        // FIXME: can not have more probes than centroids ... which is annoying because you have to have at least centroids * nprobes >= X.length otherwise you miss data and fail to recall
         for (int pb = 0; pb < nProbe; pb++) {
             int c = centroidDist[pb].c();
             float sqrY = centroidDist[pb].sqrY();

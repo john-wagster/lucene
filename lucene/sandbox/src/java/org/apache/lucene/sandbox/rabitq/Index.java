@@ -22,7 +22,7 @@ public class Index {
 
         // FIXME: FUTURE - switch these to log statements
         System.out.println("Clustering - " + dataset);
-        //clusterWithIVF(source, dataset, numCentroids);
+        clusterWithIVF(source, dataset, numCentroids);
 
         // FIXME: FUTURE - switch these to log statements
         System.out.println("Generating subspaces - " + dataset);
@@ -38,13 +38,13 @@ public class Index {
         float[][] centroids = IOUtils.readFvecs(new FileInputStream(centroidPath));
 
         String x0Path = String.format("%sx0_C%d_B%d.fvecs", source, numCentroids, B);
-        float[] x0 = IOUtils.readFvecsCalcs(new FileInputStream(x0Path));
+        float[] x0 = IOUtils.readFvecsCalcs(new FileInputStream(x0Path), X.length);
 
         String distToCentroidPath = String.format("%s%s_dist_to_centroid_%d.fvecs", source, dataset, numCentroids);
-        float[] distToCentroid = IOUtils.readFvecsCalcs(new FileInputStream(distToCentroidPath));
+        float[] distToCentroid = IOUtils.readFvecsCalcs(new FileInputStream(distToCentroidPath), X.length);
 
         String clusterIdPath = String.format("%s%s_cluster_id_%d.ivecs", source, dataset, numCentroids);
-        int[] clusterId = IOUtils.readIvecsCalcs(new FileInputStream(clusterIdPath));
+        int[] clusterId = IOUtils.readIvecsCalcs(new FileInputStream(clusterIdPath), X.length);
 
         String binaryPath = String.format("%sRandNet_C%d_B%d.ivecs", source, numCentroids, B);
         long[][] binary = IOUtils.readBinary(new FileInputStream(binaryPath));
@@ -101,7 +101,7 @@ public class Index {
 
         float[][] X = IOUtils.readFvecs(new FileInputStream(dataPath));
         float[][] centroids = IOUtils.readFvecs(new FileInputStream(centroidsPath));
-        int[] clusterId = IOUtils.readIvecsCalcs(new FileInputStream(clusterIdPath));
+        int[] clusterId = IOUtils.readIvecsCalcs(new FileInputStream(clusterIdPath), X.length);
 
         int D = X[0].length;
         int B = (D + 63) / 64 * 64;

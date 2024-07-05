@@ -25,6 +25,9 @@ public class IVF {
     public void train(float[][] vectors) {
         // FIXME: FUTURE do error checking ... has to be at least as many vectors as centroids for now
 
+        Map<Integer, Integer> vectorToCentroid = new HashMap<>();
+        Map<Integer, Set<Integer>> centroidToVectors = new HashMap<>();
+
         // randomly create totalClusters centroids from existing vectors
         this.centroids = new Centroid[totalClusters];
         List<Integer> randomStartVectors = getRandomAndRemove(
@@ -33,25 +36,24 @@ public class IVF {
         for (int i = 0; i < totalClusters; i++) {
             int vectorIndex = randomStartVectors.get(i);
             this.centroids[i] = new Centroid(i, vectors[vectorIndex].clone());
+            HashSet<Integer> vecs = new HashSet<>();
+            vecs.add(vectorIndex);
+            centroidToVectors.put(i, vecs);
+            vectorToCentroid.put(vectorIndex, i);
         }
 
-        Random random = new Random(1);
-        for(int i = 0; i < this.centroids.length; i++) {
-            for(int j = 0; j < this.centroids[0].getVector().length; j++) {
-                this.centroids[0].getVector()[j] = this.centroids[0].getVector()[j] + random.nextFloat(-0.001f, 0.0011f);
-            }
-        }
+//        Random random = new Random(1);
+//        for(int i = 0; i < this.centroids.length; i++) {
+//            for(int j = 0; j < this.centroids[0].getVector().length; j++) {
+//                this.centroids[0].getVector()[j] = this.centroids[0].getVector()[j] + random.nextFloat(-0.001f, 0.0011f);
+//            }
+//        }
 
         // iterate through all vectors until the centroids stop moving around
         boolean stable;
 
         // FIXME: FUTURE - replace w logging
         System.out.println("iterating over centroid positions");
-        Map<Integer, Integer> vectorToCentroid = new HashMap<>();
-        Map<Integer, Set<Integer>> centroidToVectors = new HashMap<>();
-        for(int i = 0; i < centroids.length; i++) {
-            centroidToVectors.put(i, new HashSet<>());
-        }
 
         // FIXME: this is too slow
         // FIXME: FUTURE - cleaner loop
@@ -96,9 +98,9 @@ public class IVF {
                 // FIXME: FUTURE - this produces a potential set of NaN vectors when no vectors are near the centroid; exclude those centroids?
                 int dimensions = vectors[0].length;
                 double[] sums = new double[dimensions];
-                for (int j = 0; j < vectorIds.size(); j++) {
+                for (int vecId : vectorIds) {
                     for (int a = 0; a < dimensions; a++) {
-                        sums[a] += vectors[j][a];
+                        sums[a] += vectors[vecId][a];
                     }
                 }
                 for(int j = 0; j < sums.length; j++) {
