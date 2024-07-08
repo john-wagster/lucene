@@ -53,7 +53,6 @@ public class Search {
     }
 
     public static void test(float[][] Q, float[][] RandQ, float[][] X, int[][] G, IVFRN ivf, int k, int B_QUERY) {
-        // FIXME: CAN NOT BE GREATER THAN THE NUMBER OF CENTROIDS!
         int nprobes = Math.min(300, ivf.C); // FIXME: FUTURE - hardcoded
 
         assert nprobes <= k;
