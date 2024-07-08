@@ -44,6 +44,7 @@ public class Search {
         writer.write(Q.toString() + "\n");
         writer.close();
 
+        // FIXME: FUTURE - selectable??
 //        IVFRN ivfrn = IVFRN.loadFromCStyle(indexPath);
         IVFRN ivfrn = IVFRN.load(indexPath);
         float[][] RandQ = MatrixUtils.multiply(Q, P);
@@ -53,7 +54,7 @@ public class Search {
 
     public static void test(float[][] Q, float[][] RandQ, float[][] X, int[][] G, IVFRN ivf, int k, int B_QUERY) {
         // FIXME: CAN NOT BE GREATER THAN THE NUMBER OF CENTROIDS!
-        int nprobes = 300; // FIXME: FUTURE - hardcoded
+        int nprobes = Math.min(300, ivf.C); // FIXME: FUTURE - hardcoded
 
         assert nprobes <= k;
 

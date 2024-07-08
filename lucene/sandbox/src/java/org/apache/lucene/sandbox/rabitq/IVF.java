@@ -58,7 +58,7 @@ public class IVF {
         // FIXME: this is too slow
         // FIXME: FUTURE - cleaner loop
         int iterations = 0;
-        int maxIterations = 1000;
+        int maxIterations = 5;
         while (true) {
             stable = true;
 
@@ -109,10 +109,10 @@ public class IVF {
                 assert !Float.isNaN(centroids[i].getVector()[0]);
             }
 
-            if(iterations % 150 == 0) {
-                // FIXME: replace w logging
-                System.out.print(".");
-            }
+//            if(iterations % 150 == 0) {
+                // FIXME: FUTURE - replace w logging
+            System.out.print(".");
+//            }
             iterations++;
 
             if(iterations >= maxIterations) {

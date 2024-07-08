@@ -107,7 +107,7 @@ public class IVFRN {
     }
 
     public void save(String filename) throws IOException {
-
+        // FIXME: FUTURE - speed this up by writing chunks of bytes
         try(FileOutputStream fos = new FileOutputStream(filename);
             DataOutputStream dos = new DataOutputStream(fos)) {
 
@@ -246,6 +246,7 @@ public class IVFRN {
             float[] u = new float[B];
             for (int i = 0; i < B; i++) {
                 u[i] = (float) Math.random();
+//                u[i] = 0.5f;
             }
 
             Factor[] fac = new Factor[N];
@@ -324,8 +325,8 @@ public class IVFRN {
 
             float[] u = new float[B];
             for (int i = 0; i < B; i++) {
-                //u[i] = (float) Math.random();
-                u[i] = 0.5f;
+                u[i] = (float) Math.random();
+//                u[i] = 0.5f;
             }
 
             Factor[] fac = new Factor[N];
@@ -398,7 +399,7 @@ public class IVFRN {
         int facCounter = startC;
         int dataCounter = startC;
         int idCounter = startC;
-        int bCounter = 0;
+        int bCounter = startC;
         for (int i = 0; i < it; i++) {
             for (int j = 0; j < SIZE; j++) {
                 float tmp_dist = fac[facCounter].sqrX() + sqr_y + fac[facCounter].factorPPC() * vl +
@@ -429,7 +430,7 @@ public class IVFRN {
         }
 
         for (int i = it * SIZE, j=0; i < len; i++, j++) {
-            float tmpDist = (fac[facCounter].sqrX()) + sqr_y + fac[facCounter].factorPPC() * vl +
+            float tmpDist = fac[facCounter].sqrX() + sqr_y + fac[facCounter].factorPPC() * vl +
                     (SpaceUtils.ipByteBin(quantQuery, binaryCode[bCounter], B_QUERY, B) * 2 - sumq) *
                             fac[facCounter].factorIP() * width;
             float errorBound = y * (fac[facCounter].error());

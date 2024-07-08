@@ -30,6 +30,12 @@ public class SpaceUtils {
         int B = (D + 63) / 64 * 64;
         long[] quantQuery = new long[B_QUERY * B / 64];
 
+        // FIXME: FUTURE - verify B_QUERY > 0
+
+        int byte_mask = 1;
+        for(int i = 0; i < B_QUERY-1; i++) {
+            byte_mask = byte_mask << 1 | 0b00000001;
+        }
 
         int qOffset = 0;
         for(int i = 0; i < B; i+=32) {
@@ -42,9 +48,9 @@ public class SpaceUtils {
                 byte[] s = new byte[4];
                 // FIXME: these masks only work for B_QUERY = 4 ... fix hardcoded masking
                 s[0] = (byte) (q[qOffset + j] << shift);
-                s[1] = (byte) (q[qOffset + j + 1] << shift | ((q[qOffset + j] >>> (8-shift))  & 0b00001111));
-                s[2] = (byte) (q[qOffset + j + 2] << shift | ((q[qOffset + j + 1] >>> (8-shift) & 0b00001111)));
-                s[3] = (byte) (q[qOffset + j + 3] << shift | ((q[qOffset + j + 2] >>> (8-shift) & 0b00001111)));
+                s[1] = (byte) (q[qOffset + j + 1] << shift | ((q[qOffset + j] >>> (8-shift)) & byte_mask));
+                s[2] = (byte) (q[qOffset + j + 2] << shift | ((q[qOffset + j + 1] >>> (8-shift)) & byte_mask));
+                s[3] = (byte) (q[qOffset + j + 3] << shift | ((q[qOffset + j + 2] >>> (8-shift)) & byte_mask));
 
                 v[j] = s[0];
                 v[j + 1] = s[1];

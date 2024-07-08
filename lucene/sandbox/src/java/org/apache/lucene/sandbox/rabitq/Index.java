@@ -50,10 +50,10 @@ public class Index {
         long[][] binary = IOUtils.readBinary(new FileInputStream(binaryPath));
 
         String indexPath = String.format("%sivfrabitq%d_B%d.index", source, numCentroids, B);
-        System.out.println("Loading Succeed!");
+        System.out.println("Loading Complete!");
         IVFRN ivf = new IVFRN(X, centroids, distToCentroid, x0, clusterId, binary);
 
-        // Save index
+        System.out.println("Saving");
         ivf.save(indexPath);
     }
 
@@ -112,17 +112,17 @@ public class Index {
         Path RNPath = Paths.get(new File(path, "RandNet_C" + numCentroids + "_B" + B + ".ivecs").getAbsolutePath());
         Path x0Path = Paths.get(new File(path, "x0_C" + numCentroids + "_B" + B + ".fvecs").getAbsolutePath());
 
-        // FIXME: BRING THIS BACK! -- hardcoding a known ortho matrix for now
-//        float[][] P = getOrthogonalMatrix(MAX_BD);
-        float[][] P = new float[MAX_BD][MAX_BD];
-        String data = new String(Files.readAllBytes(Paths.get("/Users/jwagster/workspace/query-ollama/transport.out")));
-        String[] splitData = data.split("\n");
-        for(int i = 0; i < splitData.length; i++) {
-            String[] line = splitData[i].split(" ");
-            for(int j = 0; j < line.length; j++) {
-                P[i][j] = Float.parseFloat(line[j]);
-            }
-        }
+//         FIXME: BRING THIS BACK! -- hardcoding a known ortho matrix for now
+        float[][] P = getOrthogonalMatrix(MAX_BD);
+//        float[][] P = new float[MAX_BD][MAX_BD];
+//        String data = new String(Files.readAllBytes(Paths.get("/Users/jwagster/workspace/query-ollama/transport.out")));
+//        String[] splitData = data.split("\n");
+//        for(int i = 0; i < splitData.length; i++) {
+//            String[] line = splitData[i].split(" ");
+//            for(int j = 0; j < line.length; j++) {
+//                P[i][j] = Float.parseFloat(line[j]);
+//            }
+//        }
 
         // The inverse of an orthogonal matrix equals to its transpose.
         float[][] transposedP = MatrixUtils.transpose(P);
