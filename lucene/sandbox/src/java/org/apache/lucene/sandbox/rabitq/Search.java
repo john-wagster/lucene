@@ -66,7 +66,7 @@ public class Search {
             long startTime = System.nanoTime();
             PriorityQueue<Result> KNNs = ivf.search(Q[i], RandQ[i], k, nprobes, B_QUERY);
             long endTime = System.nanoTime();
-            float usertime = (endTime - startTime) / 1e6f;
+            float usertime = (endTime - startTime) / 1e3f; // convert to microseconds to compare to the c impl
             totalUsertime += usertime;
 
             PriorityQueue<Result> copyOfKNN = new PriorityQueue<>();
@@ -78,7 +78,9 @@ public class Search {
             while (!KNNs.isEmpty()) {
                 int id = KNNs.remove().c();
                 for (int j = 0; j < k; j++) {
-                    if (id == G[i][j]) correct++;
+                    if (id == G[i][j]) {
+                        correct++;
+                    }
                 }
             }
             correctCount += correct;
