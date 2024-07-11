@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -22,7 +21,9 @@ public class Index {
 
         // FIXME: FUTURE - switch these to log statements
         System.out.println("Clustering - " + dataset);
+        long startTime = System.nanoTime();
         clusterWithIVF(source, dataset, numCentroids);
+        System.out.println("Time to compute IVF: " + (System.nanoTime() - startTime) / 1e9);
 
         // FIXME: FUTURE - switch these to log statements
         System.out.println("Generating subspaces - " + dataset);
@@ -66,7 +67,6 @@ public class Index {
         Path distToCentroidPath = Paths.get(basePath.toString(), dataset + "_dist_to_centroid_" + numCentroids + ".fvecs");
         Path clusterIdPath = Paths.get(basePath.toString(), dataset + "_cluster_id_" + numCentroids + ".ivecs");
 
-        // FIXME: one option here is to no-op this and return one centroid for all vectors
         // cluster data vectors
         System.out.println("cluster data vectors");
         IVF index = new IVF(numCentroids);
@@ -112,17 +112,7 @@ public class Index {
         Path RNPath = Paths.get(new File(path, "RandNet_C" + numCentroids + "_B" + B + ".ivecs").getAbsolutePath());
         Path x0Path = Paths.get(new File(path, "x0_C" + numCentroids + "_B" + B + ".fvecs").getAbsolutePath());
 
-//         FIXME: BRING THIS BACK! -- hardcoding a known ortho matrix for now
         float[][] P = getOrthogonalMatrix(MAX_BD);
-//        float[][] P = new float[MAX_BD][MAX_BD];
-//        String data = new String(Files.readAllBytes(Paths.get("/Users/jwagster/workspace/query-ollama/transport.out")));
-//        String[] splitData = data.split("\n");
-//        for(int i = 0; i < splitData.length; i++) {
-//            String[] line = splitData[i].split(" ");
-//            for(int j = 0; j < line.length; j++) {
-//                P[i][j] = Float.parseFloat(line[j]);
-//            }
-//        }
 
         // The inverse of an orthogonal matrix equals to its transpose.
         float[][] transposedP = MatrixUtils.transpose(P);

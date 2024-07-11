@@ -27,7 +27,7 @@ public class MatrixUtils {
 
     public static float[][] multiplyElementWise(float[][] a, float[][] b) {
         // FIXME: FUTURE - turns out this is not dotproduct as I naively assumed; it's element by element multiplication in numpy ... validate?
-        // FIXME: FUTURE -this is part of a series of transforms (optimize by doing them all at the same time)
+        // FIXME: FUTURE - this is part of a series of transforms (optimize by doing them all at the same time)
 
         assert a.length == b.length;
         assert a[0].length == b[0].length;
@@ -216,7 +216,7 @@ public class MatrixUtils {
             }
             magnitude = Math.sqrt(magnitude);
 
-            // FIXME: not good; sometimes this needs to be 0
+            // FIXME: FUTURE - not good; sometimes this needs to be 0
 //            if (magnitude == 0) {
 //                throw new IllegalArgumentException("Cannot normalize a vector of length zero.");
 //            }
@@ -264,16 +264,6 @@ public class MatrixUtils {
 
     public static float[] flatten(float[][] a) {
         float[] aFlattened = new float[a.length * a[0].length];
-        for(int i = 0; i < a.length; i++) {
-            for(int j = 0; j < a[0].length; j++) {
-                aFlattened[i*(a[0].length)+j] = a[i][j];
-            }
-        }
-        return aFlattened;
-    }
-
-    public static long[] flatten(long[][] a) {
-        long[] aFlattened = new long[a.length * a[0].length];
         for(int i = 0; i < a.length; i++) {
             for(int j = 0; j < a[0].length; j++) {
                 aFlattened[i*(a[0].length)+j] = a[i][j];

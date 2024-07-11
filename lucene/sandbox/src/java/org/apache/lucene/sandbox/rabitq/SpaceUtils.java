@@ -25,12 +25,11 @@ public class SpaceUtils {
     }
 
     public static long[] transposeBin(byte[] q, int D, int B_QUERY) {
-        assert B_QUERY == 4;  // see FIXME below
+        // FIXME: FUTURE - verify B_QUERY > 0
+        assert B_QUERY > 0;
 
         int B = (D + 63) / 64 * 64;
         long[] quantQuery = new long[B_QUERY * B / 64];
-
-        // FIXME: FUTURE - verify B_QUERY > 0
 
         int byte_mask = 1;
         for(int i = 0; i < B_QUERY-1; i++) {
@@ -46,7 +45,6 @@ public class SpaceUtils {
             int shift = 8 - B_QUERY;
             for (int j = 0; j < v.length; j += 4) {
                 byte[] s = new byte[4];
-                // FIXME: these masks only work for B_QUERY = 4 ... fix hardcoded masking
                 s[0] = (byte) (q[qOffset + j] << shift);
                 s[1] = (byte) (q[qOffset + j + 1] << shift | ((q[qOffset + j] >>> (8-shift)) & byte_mask));
                 s[2] = (byte) (q[qOffset + j + 2] << shift | ((q[qOffset + j + 1] >>> (8-shift)) & byte_mask));

@@ -44,8 +44,6 @@ public class Search {
         writer.write(Q.toString() + "\n");
         writer.close();
 
-        // FIXME: FUTURE - selectable??
-//        IVFRN ivfrn = IVFRN.loadFromCStyle(indexPath);
         IVFRN ivfrn = IVFRN.load(indexPath);
         float[][] RandQ = MatrixUtils.multiply(Q, P);
 
@@ -61,11 +59,16 @@ public class Search {
         float totalRatio = 0;
         int correctCount = 0;
 
+        float errorBoundAvg = 0f;
+        int totalExploredNNs = 0;
+        int totalComparisons = 0;
+        System.out.println("Starting search");
         for (int i = 0; i < Q.length; i++) {
             long startTime = System.nanoTime();
-            PriorityQueue<Result> KNNs = ivf.search(Q[i], RandQ[i], k, nprobes, B_QUERY);
-            long endTime = System.nanoTime();
-            float usertime = (endTime - startTime) / 1e3f; // convert to microseconds to compare to the c impl
+            IVFRNResult result = ivf.search(Q[i], RandQ[i], k, nprobes, B_QUERY);
+            PriorityQueue<Result> KNNs = result.results();
+            IVFRNStats stats = result.stats();
+            float usertime = (System.nanoTime() - startTime) / 1e3f; // convert to microseconds to compare to the c impl
             totalUsertime += usertime;
 
             PriorityQueue<Result> copyOfKNN = new PriorityQueue<>();
@@ -84,7 +87,11 @@ public class Search {
             }
             correctCount += correct;
             // FIXME: FUTURE - use logging instead
-            System.out.println("recall = " + correct + " / " + k + " " + i + 1 + " / " + Q.length + " " + usertime + "us");
+            System.out.println("recall = " + correct + " / " + k + " " + (i + 1) + " / " + Q.length + " " + usertime + " us" + " err bound avg = " + stats.errorBoundAvg() + " nn explored = " + stats.totalExploredNNs());
+
+            errorBoundAvg += stats.errorBoundAvg();
+            totalExploredNNs += stats.totalExploredNNs();
+            totalComparisons += stats.totalComparisons();
         }
 
         // FIXME: FUTURE - missing rotation time?
@@ -96,6 +103,10 @@ public class Search {
         System.out.println("------------------------------------------------");
         System.out.println("nprobe = " + nprobes + " k = " + k);
         System.out.println("Recall = " + recall * 100f + "%\t" + "Ratio = " + averageRatio);
-        System.out.println("Time = " + timeUsPerQuery + " us\t QPS = " + (1e6 / timeUsPerQuery) + " query/s");
+        System.out.println("Avg Time Per Search = " + timeUsPerQuery + " us\t QPS = " + (1e6 / timeUsPerQuery) + " query/s");
+        System.out.println("Total Search Time = " + (totalUsertime / 1e6f) + " sec");
+        System.out.println("Error Bound Avg = " + (errorBoundAvg / Q.length));
+        System.out.println("Total Explored KNN = " + totalExploredNNs);
+        System.out.println("Total Comparisons = " + totalComparisons);
     }
 }

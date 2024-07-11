@@ -42,13 +42,6 @@ public class IVF {
             vectorToCentroid.put(vectorIndex, i);
         }
 
-//        Random random = new Random(1);
-//        for(int i = 0; i < this.centroids.length; i++) {
-//            for(int j = 0; j < this.centroids[0].getVector().length; j++) {
-//                this.centroids[0].getVector()[j] = this.centroids[0].getVector()[j] + random.nextFloat(-0.001f, 0.0011f);
-//            }
-//        }
-
         // iterate through all vectors until the centroids stop moving around
         boolean stable;
 
@@ -58,7 +51,7 @@ public class IVF {
         // FIXME: this is too slow
         // FIXME: FUTURE - cleaner loop
         int iterations = 0;
-        int maxIterations = 5;
+        int maxIterations = 300000;
         while (true) {
             stable = true;
 
@@ -109,12 +102,10 @@ public class IVF {
                 assert !Float.isNaN(centroids[i].getVector()[0]);
             }
 
-//            if(iterations % 150 == 0) {
-                // FIXME: FUTURE - replace w logging
+            // FIXME: FUTURE - replace w logging
             System.out.print(".");
-//            }
-            iterations++;
 
+            iterations++;
             if(iterations >= maxIterations) {
                 break;
             }

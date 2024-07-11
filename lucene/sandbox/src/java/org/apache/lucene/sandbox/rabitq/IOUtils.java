@@ -186,6 +186,26 @@ public class IOUtils {
         }
     }
 
+    public static void toIvecs(FileOutputStream stream, int[][] data) throws IOException {
+        FileChannel fc = stream.getChannel();
+        int dimensions = data[0].length;
+        ByteBuffer bb;
+
+        for (int i = 0; i < data.length; i++) {
+            bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+            bb.putInt(data[0].length);
+            bb.flip();
+            fc.write(bb);
+
+            bb = ByteBuffer.allocate(dimensions*4).order(ByteOrder.LITTLE_ENDIAN);
+            for(int d : data[i]) {
+                bb.putInt(d);
+            }
+            bb.flip();
+            fc.write(bb);
+        }
+    }
+
     public static void toIvecsCalcs(FileOutputStream stream, int[] data) throws IOException {
         FileChannel fc = stream.getChannel();
 

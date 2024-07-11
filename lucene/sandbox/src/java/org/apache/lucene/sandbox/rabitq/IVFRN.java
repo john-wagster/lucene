@@ -2,6 +2,7 @@ package org.apache.lucene.sandbox.rabitq;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -108,58 +109,62 @@ public class IVFRN {
 
     public void save(String filename) throws IOException {
         // FIXME: FUTURE - speed this up by writing chunks of bytes
-        try(FileOutputStream fos = new FileOutputStream(filename);
-            DataOutputStream dos = new DataOutputStream(fos)) {
+        try(FileOutputStream fos = new FileOutputStream(filename); FileChannel fc = fos.getChannel()) {
+            ByteBuffer bb = ByteBuffer.allocate(4*4).order(ByteOrder.LITTLE_ENDIAN);
+            bb.putInt(N);
+            bb.putInt(D);
+            bb.putInt(C);
+            bb.putInt(B);
+            bb.flip();
+            fc.write(bb);
 
-            dos.writeInt(N);
-            dos.writeInt(D);
-            dos.writeInt(C);
-            dos.writeInt(B);
+            //start, len, id, distToC, x0, centroids, data, binaryCode
+            bb = ByteBuffer.allocate(4*C + 4*C + 4*N + 4*N + 4*N + 4*C*B + 4*N*D + 8*N*B/64).order(ByteOrder.LITTLE_ENDIAN);
+            for (int i = 0; i < C; i++) {
+                bb.putInt(start[i]);
+            }
 
             for (int i = 0; i < C; i++) {
-                dos.writeInt(start[i]);
-            }
-
-            for (int i = 0; i < C; i++) {
-                dos.writeInt(len[i]);
+                bb.putInt(len[i]);
             }
 
             for (int i = 0; i < N; i++) {
-                dos.writeInt(id[i]);
+                bb.putInt(id[i]);
             }
 
             for (int i = 0; i < N; i++) {
-                dos.writeFloat(distToC[i]);
+                bb.putFloat(distToC[i]);
             }
 
             for (int i = 0; i < N; i++) {
-                dos.writeFloat(x0[i]);
+                bb.putFloat(x0[i]);
             }
 
             for (int i = 0; i < C; i++) {
                 for (int j = 0; j < B; j++) {
-                    dos.writeFloat(centroids[i][j]);
+                    bb.putFloat(centroids[i][j]);
                 }
             }
 
             for (int i = 0; i < N; i++) {
                 for (int j = 0; j < D; j++) {
-                    dos.writeFloat(data[i][j]);
+                    bb.putFloat(data[i][j]);
                 }
             }
 
             for (int i = 0; i < N; i++) {
                 for (int j = 0; j < B / 64; j++) {
-                    dos.writeLong(binaryCode[i][j]);
+                    bb.putLong(binaryCode[i][j]);
                 }
             }
+
+            bb.flip();
+            fc.write(bb);
         }
     }
 
-    public static IVFRN loadFromCStyle(String filename) throws IOException {
-        try (FileInputStream fis = new FileInputStream(filename);
-            FileChannel fc = fis.getChannel(); ) {
-
+    public static IVFRN load(String filename) throws IOException {
+        try(FileInputStream fis = new FileInputStream(filename); FileChannel fc = fis.getChannel()) {
             ByteBuffer bb = ByteBuffer.allocate(4*4).order(ByteOrder.LITTLE_ENDIAN);
             fc.read(bb);
             bb.flip();
@@ -181,62 +186,43 @@ public class IVFRN {
             float[] distToC = new float[N];
             float[] x0 = new float[N];
 
-            bb = ByteBuffer.allocate(C*4).order(ByteOrder.LITTLE_ENDIAN);
+            //start, len, id, distToC, x0, centroids, data, binaryCode
+            bb = ByteBuffer.allocate(4*C + 4*C + 4*N + 4*N + 4*N + 4*C*B + 4*N*D + 8*N*B/64).order(ByteOrder.LITTLE_ENDIAN);
             fc.read(bb);
             bb.flip();
+
             for (int i = 0; i < C; i++) {
                 start[i] = bb.getInt();
             }
 
-            bb = ByteBuffer.allocate(C*4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
             for (int i = 0; i < C; i++) {
                 len[i] = bb.getInt();
             }
 
-            bb = ByteBuffer.allocate(N*4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
             for (int i = 0; i < N; i++) {
                 id[i] = bb.getInt();
             }
 
-            bb = ByteBuffer.allocate(N*4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
             for (int i = 0; i < N; i++) {
                 distToC[i] = bb.getFloat();
             }
 
-            bb = ByteBuffer.allocate(N*4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
             for (int i = 0; i < N; i++) {
                 x0[i] = bb.getFloat();
             }
 
-            bb = ByteBuffer.allocate(C*B*4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
             for (int i = 0; i < C; i++) {
                 for (int j = 0; j < B; j++) {
                     centroids[i][j] = bb.getFloat();
                 }
             }
 
-            bb = ByteBuffer.allocate(N*D*4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
             for (int i = 0; i < N; i++) {
                 for (int j = 0; j < D; j++) {
                     data[i][j] = bb.getFloat();
                 }
             }
 
-            bb = ByteBuffer.allocate(N*(B/64)*8).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
             for (int i = 0; i < N; i++) {
                 for (int j = 0; j < B / 64; j++) {
                     binaryCode[i][j] = bb.getLong();
@@ -263,87 +249,7 @@ public class IVFRN {
         }
     }
 
-    public static IVFRN load(String filename) throws IOException {
-        try (FileInputStream fis = new FileInputStream(filename);
-             DataInputStream dis = new DataInputStream(fis) ) {
-
-            int N = dis.readInt();
-            int D = dis.readInt();
-            int C = dis.readInt();
-            int B = dis.readInt();
-
-            float fac_norm = (float) Utils.constSqrt(1.0 * B);
-            float max_x1 = (float) (1.9 / Utils.constSqrt(1.0 * B-1.0));
-
-            float[][] centroids = new float[C][B];
-            float[][] data = new float[N][D];
-
-            long[][] binaryCode = new long[N][B / 64];
-            int[] start = new int[C];
-            int[] len = new int[C];
-            int[] id = new int[N];
-            float[] distToC = new float[N];
-            float[] x0 = new float[N];
-
-            for (int i = 0; i < C; i++) {
-                start[i] = dis.readInt();
-            }
-
-            for (int i = 0; i < C; i++) {
-                len[i] = dis.readInt();
-            }
-
-            for (int i = 0; i < N; i++) {
-                id[i] = dis.readInt();
-            }
-
-            for (int i = 0; i < N; i++) {
-                distToC[i] = dis.readFloat();
-            }
-
-            for (int i = 0; i < N; i++) {
-                x0[i] = dis.readFloat();
-            }
-
-            for (int i = 0; i < C; i++) {
-                for (int j = 0; j < B; j++) {
-                    centroids[i][j] = dis.readFloat();
-                }
-            }
-
-            for (int i = 0; i < N; i++) {
-                for (int j = 0; j < D; j++) {
-                    data[i][j] = dis.readFloat();
-                }
-            }
-
-            for (int i = 0; i < N; i++) {
-                for (int j = 0; j < B / 64; j++) {
-                    binaryCode[i][j] = dis.readLong();
-                }
-            }
-
-            float[] u = new float[B];
-            for (int i = 0; i < B; i++) {
-                u[i] = (float) Math.random();
-//                u[i] = 0.5f;
-            }
-
-            Factor[] fac = new Factor[N];
-            for (int i = 0; i < N; i++) {
-                double x_x0 = distToC[i] / x0[i];
-                float sqrX = distToC[i] * distToC[i];
-                float error = (float) (2.0 * max_x1 * Math.sqrt(x_x0 * x_x0 - distToC[i] * distToC[i]));
-                float factorPPC = (float) (-2.0 / fac_norm * x_x0 * ((float) SpaceUtils.popcount(binaryCode[i], B) * 2.0 - B));
-                float factorIP = (float) (-2.0 / fac_norm * x_x0);
-                fac[i] = new Factor(sqrX, error, factorPPC, factorIP);
-            }
-
-            return new IVFRN(N, D, C, B, centroids, data, binaryCode, start, len, id, distToC, x0, u, fac);
-        }
-    }
-
-    public PriorityQueue<Result> search(float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) {
+    public IVFRNResult search(float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) {
         //FIXME: FUTURE - implement fast scan and do a comparison
 
         this.distK = Float.MAX_VALUE;
@@ -361,7 +267,9 @@ public class IVFRN {
         // FIXME: FUTURE - do a partial sort
         Arrays.sort(centroidDist, Comparator.comparingDouble(Result::sqrY));
 
-        // FIXME: can not have more probes than centroids ... which is annoying because you have to have at least centroids * nprobes >= X.length otherwise you miss data and fail to recall
+        int totalExploredKNNs = 0;
+        int totalComparisons = 0;
+        float errorBoundAvg = 0f;
         for (int pb = 0; pb < nProbe; pb++) {
             int c = centroidDist[pb].c();
             float sqrY = centroidDist[pb].sqrY();
@@ -383,13 +291,17 @@ public class IVFRN {
             long[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
 
             int startC = start[c];
-            scan(knns, k, quantQuery, startC, len[c], sqrY, vl, width, sumQ, query, B_QUERY, B);
+            IVFRNStats subStats = scan(knns, k, quantQuery, startC, len[c], sqrY, vl, width, sumQ, query, B_QUERY, B);
+            totalExploredKNNs += subStats.totalExploredNNs();
+            errorBoundAvg += subStats.errorBoundAvg();
+            totalComparisons += subStats.totalComparisons();
         }
 
-        return knns;
+        IVFRNStats stats = new IVFRNStats(totalExploredKNNs, totalComparisons, errorBoundAvg / nProbe);
+        return new IVFRNResult(knns, stats);
     }
 
-    public void scan(PriorityQueue<Result> KNNs, int k, long[] quantQuery, int startC, int len,
+    public IVFRNStats scan(PriorityQueue<Result> KNNs, int k, long[] quantQuery, int startC, int len,
                      float sqr_y, float vl, float width, float sumq, float[] query, int B_QUERY, int B) {
         int SIZE = 32;
         float y = (float) Math.sqrt(sqr_y);
@@ -400,6 +312,10 @@ public class IVFRN {
         int dataCounter = startC;
         int idCounter = startC;
         int bCounter = startC;
+        float errorBoundAvg = 0.0f;
+        int totalExploredNNs = 0;
+        int totalComparisons = 0;
+        int totalEstimatorDistancesComputed = 0;
         for (int i = 0; i < it; i++) {
             for (int j = 0; j < SIZE; j++) {
                 float tmp_dist = fac[facCounter].sqrX() + sqr_y + fac[facCounter].factorPPC() * vl +
@@ -407,12 +323,16 @@ public class IVFRN {
                                 fac[facCounter].factorIP() * width;
                 float error_bound = y * (fac[facCounter].error());
                 res[j] = tmp_dist - error_bound;
+                errorBoundAvg += error_bound;
+                totalEstimatorDistancesComputed++;
                 bCounter++;
                 facCounter++;
             }
 
             for (int j = 0; j < SIZE; j++) {
+                totalComparisons++;
                 if (res[j] < distK) {
+                    totalExploredNNs++;
                     float gt_dist = VectorUtils.squareDistance(query, data[dataCounter]);
                     if (gt_dist < distK) {
                         KNNs.add(new Result(gt_dist, id[idCounter]));
@@ -435,12 +355,16 @@ public class IVFRN {
                             fac[facCounter].factorIP() * width;
             float errorBound = y * (fac[facCounter].error());
             res[j] = tmpDist - errorBound;
+            errorBoundAvg += errorBound;
+            totalEstimatorDistancesComputed++;
             facCounter++;
             bCounter++;
         }
 
         for (int i = it * SIZE, j=0; i < len; i++, j++) {
+            totalComparisons++;
             if (res[j] < distK) {
+                totalExploredNNs++;
                 float gt_dist = VectorUtils.squareDistance(query, data[dataCounter]);
                 if (gt_dist < distK) {
                     KNNs.add(new Result(gt_dist, id[idCounter]));
@@ -455,6 +379,8 @@ public class IVFRN {
             dataCounter++;
             idCounter++;
         }
+
+        return new IVFRNStats(totalExploredNNs, totalComparisons, errorBoundAvg / totalEstimatorDistancesComputed);
     }
 }
 
