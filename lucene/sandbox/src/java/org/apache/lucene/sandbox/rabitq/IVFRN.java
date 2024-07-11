@@ -290,7 +290,7 @@ public class IVFRN {
             totalComparisons += subStats.totalComparisons();
         }
 
-        IVFRNStats stats = new IVFRNStats(totalExploredKNNs, totalComparisons, 0, errorBoundAvg / nProbe);
+        IVFRNStats stats = new IVFRNStats(totalExploredKNNs, totalComparisons, 0, 0, errorBoundAvg / nProbe);
         return new IVFRNResult(knns, stats);
     }
 
@@ -314,18 +314,14 @@ public class IVFRN {
         Arrays.sort(centroidDist, Comparator.comparingDouble(Result::sqrY));
 
         // FIXME: don't use the Result class for this; it's confusing
-        PriorityQueue<Result> estimatorDistances = new PriorityQueue<>(new Comparator<Result>() {
-            @Override
-            public int compare(Result o1, Result o2) {
-                return o1.sqrY() > o2.sqrY() ? 1 : -1;
-            }
-        });
+        int maxEstimatorSize = 500;
+        PriorityQueue<Result> estimatorDistances = new PriorityQueue<>(maxEstimatorSize, Comparator.reverseOrder());
 
         int totalExploredKNNs = 0;
         int totalComparisons = 0;
         float errorBoundAvg = 0f;
         int errorBoundTotalCalcs = 0;
-        int maxEstimatorSize = 500;
+        int totalEstimatorQueueAdds = 0;
         for (int pb = 0; pb < nProbe; pb++) {
             int c = centroidDist[pb].c();
             float sqrY = centroidDist[pb].sqrY();
@@ -364,14 +360,13 @@ public class IVFRN {
                 float errorBound = y * (fac[facCounter].error());
                 float estimator = tmpDist - errorBound;
 
-                if(estimator < passOneDistK) {
+                if (estimatorDistances.size() < maxEstimatorSize) {
+                    totalEstimatorQueueAdds++;
                     estimatorDistances.add(new Result(estimator, startC + i));
-                    if(estimatorDistances.size() > maxEstimatorSize) {
-                        estimatorDistances.remove();
-                    }
-                    if (estimatorDistances.size() == maxEstimatorSize) {
-                        passOneDistK = estimatorDistances.peek().sqrY();
-                    }
+                } else if (estimator < estimatorDistances.peek().sqrY()) {
+                    estimatorDistances.poll();
+                    totalEstimatorQueueAdds++;
+                    estimatorDistances.add(new Result(estimator, startC + i));
                 }
 
                 errorBoundAvg += errorBound;
@@ -400,7 +395,7 @@ public class IVFRN {
             }
         }
 
-        IVFRNStats stats = new IVFRNStats(totalExploredKNNs, totalComparisons, maxEstimatorSize, errorBoundAvg / errorBoundTotalCalcs);
+        IVFRNStats stats = new IVFRNStats(totalExploredKNNs, totalComparisons, maxEstimatorSize, totalEstimatorQueueAdds, errorBoundAvg / errorBoundTotalCalcs);
         return new IVFRNResult(knns, stats);
     }
 
@@ -486,7 +481,7 @@ public class IVFRN {
             idCounter++;
         }
 
-        return new IVFRNStats(totalExploredNNs, totalComparisons, 0, errorBoundAvg / totalEstimatorDistancesComputed);
+        return new IVFRNStats(totalExploredNNs, totalComparisons, 0, 0, errorBoundAvg / totalEstimatorDistancesComputed);
     }
 
     public IVFRNStats scan(PriorityQueue<Result> KNNs, int k, long[] quantQuery, int startC, int len,
@@ -555,7 +550,7 @@ public class IVFRN {
             }
         }
 
-        return new IVFRNStats(totalExploredNNs, totalComparisons, 0,errorBoundAvg / totalEstimatorDistancesComputed);
+        return new IVFRNStats(totalExploredNNs, totalComparisons, 0,0, errorBoundAvg / totalEstimatorDistancesComputed);
     }
 }
 

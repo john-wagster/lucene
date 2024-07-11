@@ -64,6 +64,7 @@ public class Search {
         int totalExploredNNs = 0;
         int totalComparisons = 0;
         int maxEstimatorSize = 0;
+        int totalEstimatorAdds = 0;
         System.out.println("Starting search");
         for (int i = 0; i < Q.length; i++) {
             long startTime = System.nanoTime();
@@ -99,6 +100,7 @@ public class Search {
             totalExploredNNs += stats.totalExploredNNs();
             totalComparisons += stats.totalComparisons();
             maxEstimatorSize = stats.maxEstimatorSize();
+            totalEstimatorAdds += stats.totalEstimatorQueueAdds();
         }
         System.out.println();
 
@@ -117,5 +119,6 @@ public class Search {
         System.out.println("Total Explored KNN = " + totalExploredNNs);
         System.out.println("Total Comparisons = " + totalComparisons);
         System.out.println("Max Estimator Size = " + maxEstimatorSize);
+        System.out.println("Total Estimator Adds = " + totalEstimatorAdds);
     }
 }
