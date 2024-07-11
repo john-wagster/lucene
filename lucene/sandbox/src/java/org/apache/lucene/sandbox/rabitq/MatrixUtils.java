@@ -1,7 +1,5 @@
 package org.apache.lucene.sandbox.rabitq;
 
-import java.util.Arrays;
-
 public class MatrixUtils {
     public static float[][] multiply(float[][] a, float[][] b) {
         int n = a.length;

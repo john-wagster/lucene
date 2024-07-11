@@ -1,8 +1,5 @@
 package org.apache.lucene.sandbox.rabitq;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -10,6 +7,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 
@@ -39,9 +37,6 @@ public class IVFRN {
     private float distK = Float.MAX_VALUE;
 
     public IVFRN(float[][] X, float[][] centroids, float[] distToCentroid, float[] _x0, int[] clusterId, long[][] binary) {
-
-        // FIXME: FUTURE - compute fac and u here??
-
         D = X[0].length;
         B = (D + 63) / 64 * 64;
 
@@ -108,7 +103,6 @@ public class IVFRN {
     }
 
     public void save(String filename) throws IOException {
-        // FIXME: FUTURE - speed this up by writing chunks of bytes
         try(FileOutputStream fos = new FileOutputStream(filename); FileChannel fc = fos.getChannel()) {
             ByteBuffer bb = ByteBuffer.allocate(4*4).order(ByteOrder.LITTLE_ENDIAN);
             bb.putInt(N);
@@ -232,7 +226,6 @@ public class IVFRN {
             float[] u = new float[B];
             for (int i = 0; i < B; i++) {
                 u[i] = (float) Math.random();
-//                u[i] = 0.5f;
             }
 
             Factor[] fac = new Factor[N];
@@ -249,7 +242,7 @@ public class IVFRN {
         }
     }
 
-    public IVFRNResult search(float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) {
+    public IVFRNResult origSearch(float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) {
         //FIXME: FUTURE - implement fast scan and do a comparison
 
         this.distK = Float.MAX_VALUE;
@@ -291,22 +284,134 @@ public class IVFRN {
             long[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
 
             int startC = start[c];
-            IVFRNStats subStats = scan(knns, k, quantQuery, startC, len[c], sqrY, vl, width, sumQ, query, B_QUERY, B);
+            IVFRNStats subStats = origScan(knns, k, quantQuery, startC, len[c], sqrY, vl, width, sumQ, query, B_QUERY, B);
             totalExploredKNNs += subStats.totalExploredNNs();
             errorBoundAvg += subStats.errorBoundAvg();
             totalComparisons += subStats.totalComparisons();
         }
 
-        IVFRNStats stats = new IVFRNStats(totalExploredKNNs, totalComparisons, errorBoundAvg / nProbe);
+        IVFRNStats stats = new IVFRNStats(totalExploredKNNs, totalComparisons, 0, errorBoundAvg / nProbe);
         return new IVFRNResult(knns, stats);
     }
 
-    public IVFRNStats scan(PriorityQueue<Result> KNNs, int k, long[] quantQuery, int startC, int len,
-                     float sqr_y, float vl, float width, float sumq, float[] query, int B_QUERY, int B) {
+    public IVFRNResult search(float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) {
+        //FIXME: FUTURE - implement fast scan and do a comparison
+
+        this.distK = Float.MAX_VALUE;
+        float passOneDistK = Float.MAX_VALUE;
+
+        PriorityQueue<Result> knns = new PriorityQueue<>(Comparator.reverseOrder());
+
+        // Find out the nearest N_{probe} centroids to the query vector.
+        Result[] centroidDist = new Result[C];
+        for (int i = 0; i < C; i++) {
+            centroidDist[i] = new Result(VectorUtils.squareDistance(rdQuery, centroids[i]), i);
+        }
+
+        assert nProbe < centroidDist.length;
+
+        // FIXME: FUTURE - do a partial sort
+        Arrays.sort(centroidDist, Comparator.comparingDouble(Result::sqrY));
+
+        // FIXME: don't use the Result class for this; it's confusing
+        PriorityQueue<Result> estimatorDistances = new PriorityQueue<>(new Comparator<Result>() {
+            @Override
+            public int compare(Result o1, Result o2) {
+                return o1.sqrY() > o2.sqrY() ? 1 : -1;
+            }
+        });
+
+        int totalExploredKNNs = 0;
+        int totalComparisons = 0;
+        float errorBoundAvg = 0f;
+        int errorBoundTotalCalcs = 0;
+        int maxEstimatorSize = 500;
+        for (int pb = 0; pb < nProbe; pb++) {
+            int c = centroidDist[pb].c();
+            float sqrY = centroidDist[pb].sqrY();
+
+            if(!Float.isFinite(sqrY)) {
+                continue;
+            }
+
+            // Preprocess the residual query and the quantized query
+            float[] v = SpaceUtils.range(rdQuery, centroids[c]);
+            float vl = v[0], vr = v[1];
+            float width = (vr - vl) / ((1 << B_QUERY) - 1);
+
+            QuantResult quantResult = SpaceUtils.quantize(rdQuery, centroids[c], u, vl, width);
+            byte[] byteQuery = quantResult.result();
+            int sumQ = quantResult.sumQ();
+
+            // Binary String Representation
+            long[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
+
+            int startC = start[c];
+
+            int len_sub = len[c];
+            float sqr_y = sqrY;
+            float sumq = sumQ;
+
+            float y = (float) Math.sqrt(sqr_y);
+
+            int facCounter = startC;
+            int bCounter = startC;
+
+            for (int i = 0; i < len_sub; i++) {
+                float tmpDist = fac[facCounter].sqrX() + sqr_y + fac[facCounter].factorPPC() * vl +
+                        (SpaceUtils.ipByteBin(quantQuery, binaryCode[bCounter], B_QUERY, B) * 2 - sumq) *
+                                fac[facCounter].factorIP() * width;
+                float errorBound = y * (fac[facCounter].error());
+                float estimator = tmpDist - errorBound;
+
+                if(estimator < passOneDistK) {
+                    estimatorDistances.add(new Result(estimator, startC + i));
+                    if(estimatorDistances.size() > maxEstimatorSize) {
+                        estimatorDistances.remove();
+                    }
+                    if (estimatorDistances.size() == maxEstimatorSize) {
+                        passOneDistK = estimatorDistances.peek().sqrY();
+                    }
+                }
+
+                errorBoundAvg += errorBound;
+                errorBoundTotalCalcs++;
+                bCounter++;
+                facCounter++;
+            }
+        }
+
+        int size = estimatorDistances.size();
+        for(int i = 0; i < size; i++) {
+            Result res = estimatorDistances.remove();
+            totalComparisons++;
+            if (res.sqrY() < distK) {
+                totalExploredKNNs++;
+                float gt_dist = VectorUtils.squareDistance(query, data[res.c()]);
+                if (gt_dist < distK) {
+                    knns.add(new Result(gt_dist, id[res.c()]));
+                    if (knns.size() > k) {
+                        knns.remove();
+                    }
+                    if (knns.size() == k) {
+                        distK = knns.peek().sqrY();
+                    }
+                }
+            }
+        }
+
+        IVFRNStats stats = new IVFRNStats(totalExploredKNNs, totalComparisons, maxEstimatorSize, errorBoundAvg / errorBoundTotalCalcs);
+        return new IVFRNResult(knns, stats);
+    }
+
+    public IVFRNStats origScan(PriorityQueue<Result> KNNs, int k, long[] quantQuery, int startC, int len,
+                     float sqrY, float vl, float width, float sumq, float[] query, int B_QUERY, int B) {
         int SIZE = 32;
-        float y = (float) Math.sqrt(sqr_y);
+        float y = (float) Math.sqrt(sqrY);
         float[] res = new float[SIZE];
         int it = len / SIZE;
+
+        float errorBoundAdj = 0.25f; // FIXME: FUTURE - hard coded
 
         int facCounter = startC;
         int dataCounter = startC;
@@ -316,14 +421,15 @@ public class IVFRN {
         int totalExploredNNs = 0;
         int totalComparisons = 0;
         int totalEstimatorDistancesComputed = 0;
+        // FIXME: do the reranking after all the approx distances are gathered
         for (int i = 0; i < it; i++) {
             for (int j = 0; j < SIZE; j++) {
-                float tmp_dist = fac[facCounter].sqrX() + sqr_y + fac[facCounter].factorPPC() * vl +
+                float tmpDist = fac[facCounter].sqrX() + sqrY + fac[facCounter].factorPPC() * vl +
                         (SpaceUtils.ipByteBin(quantQuery, binaryCode[bCounter], B_QUERY, B) * 2 - sumq) *
                                 fac[facCounter].factorIP() * width;
-                float error_bound = y * (fac[facCounter].error());
-                res[j] = tmp_dist - error_bound;
-                errorBoundAvg += error_bound;
+                float errorBound = y * (fac[facCounter].error());
+                res[j] = tmpDist - (errorBound * errorBoundAdj);
+                errorBoundAvg += errorBound;
                 totalEstimatorDistancesComputed++;
                 bCounter++;
                 facCounter++;
@@ -350,11 +456,11 @@ public class IVFRN {
         }
 
         for (int i = it * SIZE, j=0; i < len; i++, j++) {
-            float tmpDist = fac[facCounter].sqrX() + sqr_y + fac[facCounter].factorPPC() * vl +
+            float tmpDist = fac[facCounter].sqrX() + sqrY + fac[facCounter].factorPPC() * vl +
                     (SpaceUtils.ipByteBin(quantQuery, binaryCode[bCounter], B_QUERY, B) * 2 - sumq) *
                             fac[facCounter].factorIP() * width;
             float errorBound = y * (fac[facCounter].error());
-            res[j] = tmpDist - errorBound;
+            res[j] = tmpDist - (errorBound * errorBoundAdj);
             errorBoundAvg += errorBound;
             totalEstimatorDistancesComputed++;
             facCounter++;
@@ -380,7 +486,76 @@ public class IVFRN {
             idCounter++;
         }
 
-        return new IVFRNStats(totalExploredNNs, totalComparisons, errorBoundAvg / totalEstimatorDistancesComputed);
+        return new IVFRNStats(totalExploredNNs, totalComparisons, 0, errorBoundAvg / totalEstimatorDistancesComputed);
+    }
+
+    public IVFRNStats scan(PriorityQueue<Result> KNNs, int k, long[] quantQuery, int startC, int len,
+                           float sqrY, float vl, float width, float sumq, float[] query, int B_QUERY, int B) {
+        float y = (float) Math.sqrt(sqrY);
+
+        float errorBoundAdj = 0.25f; // FIXME: FUTURE - hard coded
+
+        int facCounter = startC;
+        int bCounter = startC;
+        float errorBoundAvg = 0.0f;
+        int totalExploredNNs = 0;
+        int totalComparisons = 0;
+        int totalEstimatorDistancesComputed = 0;
+        // FIXME: do the reranking after all the approx distances are gathered
+
+        float passOneDistK = Float.MAX_VALUE;
+        // FIXME: don't use the Result class for this; it's confusing
+        PriorityQueue<Result> estimatorDistances = new PriorityQueue<>(new Comparator<Result>() {
+            @Override
+            public int compare(Result o1, Result o2) {
+                return o1.sqrY() > o2.sqrY() ? 1 : -1;
+            }
+        });
+        for (int i = 0; i < len; i++) {
+            float tmpDist = fac[facCounter].sqrX() + sqrY + fac[facCounter].factorPPC() * vl +
+                    (SpaceUtils.ipByteBin(quantQuery, binaryCode[bCounter], B_QUERY, B) * 2 - sumq) *
+                            fac[facCounter].factorIP() * width;
+            float errorBound = y * (fac[facCounter].error());
+            float estimator = tmpDist - errorBound;
+
+            if(estimator < passOneDistK) {
+                estimatorDistances.add(new Result(estimator, i));
+                if(estimatorDistances.size() > (k*4)) {
+                    estimatorDistances.remove();
+                }
+                if (KNNs.size() == (k*4)) {
+                    passOneDistK = estimatorDistances.peek().sqrY();
+                }
+            }
+
+            errorBoundAvg += errorBound;
+            totalEstimatorDistancesComputed++;
+            bCounter++;
+            facCounter++;
+        }
+
+        int dataCounter = startC;
+        int idCounter = startC;
+        int size = estimatorDistances.size();
+        for(int i = 0; i < size; i++) {
+            Result res = estimatorDistances.remove();
+            totalComparisons++;
+            if (res.sqrY() < distK) {
+                totalExploredNNs++;
+                float gt_dist = VectorUtils.squareDistance(query, data[dataCounter + res.c()]);
+                if (gt_dist < distK) {
+                    KNNs.add(new Result(gt_dist, id[idCounter + res.c()]));
+                    if (KNNs.size() > k) {
+                        KNNs.remove();
+                    }
+                    if (KNNs.size() == k) {
+                        distK = KNNs.peek().sqrY();
+                    }
+                }
+            }
+        }
+
+        return new IVFRNStats(totalExploredNNs, totalComparisons, 0,errorBoundAvg / totalEstimatorDistancesComputed);
     }
 }
 
