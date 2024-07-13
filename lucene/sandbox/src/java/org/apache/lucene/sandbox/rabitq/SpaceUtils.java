@@ -26,6 +26,7 @@ public class SpaceUtils {
 
     public static long[] transposeBin(byte[] q, int D, int B_QUERY) {
         // FIXME: FUTURE - verify B_QUERY > 0
+        // FIXME: rewrite with panama?
         assert B_QUERY > 0;
 
         int B = (D + 63) / 64 * 64;
@@ -115,6 +116,7 @@ public class SpaceUtils {
     }
 
     public static QuantResult quantize(float[] q, float[] c, float[] u, float vl, float width) {
+        // FIXME: speed up with panama?
         byte[] result = new byte[q.length];
         float oneOverWidth = 1.0f / width;
         int sumQ = 0;

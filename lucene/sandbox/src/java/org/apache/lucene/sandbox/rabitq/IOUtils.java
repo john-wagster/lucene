@@ -37,25 +37,6 @@ public class IOUtils {
         return data;
     }
 
-    public static float[] readFvecsCalcs(FileInputStream stream, int totalItems) throws IOException {
-        FileChannel fc = stream.getChannel();
-
-        float[] data = new float[totalItems];
-        for (int i = 0; i < totalItems; i++) {
-            ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
-            int one = bb.getInt();
-
-            bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
-            data[i] = bb.getFloat();
-        }
-
-        return data;
-    }
-
     public static int[][] readIvecs(FileInputStream stream) throws IOException {
         FileChannel fc = stream.getChannel();
         ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
@@ -83,53 +64,6 @@ public class IOUtils {
         return data;
     }
 
-    public static int[] readIvecsCalcs(FileInputStream stream, int totalItems) throws IOException {
-        FileChannel fc = stream.getChannel();
-
-        int[] data = new int[totalItems];
-        for (int i = 0; i < totalItems; i++) {
-            ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
-            int one = bb.getInt();
-
-            bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
-            data[i] = bb.getInt();
-        }
-
-        return data;
-    }
-
-    public static long[][] readBinary(FileInputStream stream) throws IOException {
-        FileChannel fc = stream.getChannel();
-        ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-        fc.read(bb);
-        bb.flip();
-        int dimensions = bb.getInt();
-
-        long fsize = fc.size();
-        int size = (int) ((fsize) / (dimensions * 8 + 4));
-        long[][] data = new long[size][dimensions];
-        for (int i = 0; i < size; i++) {
-            if (i != 0) {
-                bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-                fc.read(bb);
-                bb.flip();
-                assert dimensions == bb.getInt();    /// dimensions every time
-            }
-
-            byte[] vector = new byte[dimensions * 8];
-            bb = ByteBuffer.wrap(vector).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
-            bb.asLongBuffer().get(data[i], 0, dimensions);
-        }
-
-        return data;
-    }
-
     public static void toFvecs(FileOutputStream stream, float[][] data) throws IOException {
         FileChannel fc = stream.getChannel();
         int dimensions = data[0].length;
@@ -144,42 +78,6 @@ public class IOUtils {
             bb = ByteBuffer.allocate(dimensions*4).order(ByteOrder.LITTLE_ENDIAN);
             for(float d : data[i]) {
                 bb.putFloat(d);
-            }
-            bb.flip();
-            fc.write(bb);
-        }
-    }
-
-    public static void toFvecsCalcs(FileOutputStream stream, float[] data) throws IOException {
-        FileChannel fc = stream.getChannel();
-
-        for (int i = 0; i < data.length; i++) {
-            ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            bb.putInt(1);
-            bb.flip();
-            fc.write(bb);
-
-            bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            bb.putFloat(data[i]);
-            bb.flip();
-            fc.write(bb);
-        }
-    }
-
-    public static void toIvecs(FileOutputStream stream, long[][] data) throws IOException {
-        FileChannel fc = stream.getChannel();
-        int dimensions = data[0].length;
-        ByteBuffer bb;
-
-        for (int i = 0; i < data.length; i++) {
-            bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            bb.putInt(data[0].length);
-            bb.flip();
-            fc.write(bb);
-
-            bb = ByteBuffer.allocate(dimensions*8).order(ByteOrder.LITTLE_ENDIAN);
-            for(long d : data[i]) {
-                bb.putLong(d);
             }
             bb.flip();
             fc.write(bb);
@@ -201,22 +99,6 @@ public class IOUtils {
             for(int d : data[i]) {
                 bb.putInt(d);
             }
-            bb.flip();
-            fc.write(bb);
-        }
-    }
-
-    public static void toIvecsCalcs(FileOutputStream stream, int[] data) throws IOException {
-        FileChannel fc = stream.getChannel();
-
-        for (int i = 0; i < data.length; i++) {
-            ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            bb.putInt(1);
-            bb.flip();
-            fc.write(bb);
-
-            bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            bb.putInt(data[i]);
             bb.flip();
             fc.write(bb);
         }

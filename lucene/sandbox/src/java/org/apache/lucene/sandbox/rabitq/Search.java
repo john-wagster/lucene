@@ -52,7 +52,7 @@ public class Search {
     public static void test(float[][] Q, float[][] RandQ, float[][] X, int[][] G, IVFRN ivf, int k, int B_QUERY) {
 
         int nprobes = 300;
-        nprobes = Math.min(nprobes, ivf.C); // FIXME: hardcoded
+        nprobes = Math.min(nprobes, ivf.getC()); // FIXME: hardcoded
         assert nprobes <= k;
 
         float totalUsertime = 0;
@@ -60,14 +60,12 @@ public class Search {
         int correctCount = 0;
 
         float errorBoundAvg = 0f;
-        int totalExploredNNs = 0;
-        int totalComparisons = 0;
         int maxEstimatorSize = 0;
         int totalEstimatorAdds = 0;
         System.out.println("Starting search");
         for (int i = 0; i < Q.length; i++) {
             long startTime = System.nanoTime();
-            IVFRNResult result = ivf.search(Q[i], RandQ[i], k, nprobes, B_QUERY);
+            IVFRNResult result = ivf.search(X, Q[i], RandQ[i], k, nprobes, B_QUERY);
             PriorityQueue<Result> KNNs = result.results();
             IVFRNStats stats = result.stats();
             float usertime = (System.nanoTime() - startTime) / 1e3f; // convert to microseconds to compare to the c impl
@@ -94,8 +92,6 @@ public class Search {
             }
 
             errorBoundAvg += stats.errorBoundAvg();
-            totalExploredNNs += stats.totalExploredNNs();
-            totalComparisons += stats.totalComparisons();
             maxEstimatorSize = stats.maxEstimatorSize();
             totalEstimatorAdds += stats.totalEstimatorQueueAdds();
         }
@@ -107,13 +103,11 @@ public class Search {
         float averageRatio = totalRatio / (Q.length * k);
 
         System.out.println("------------------------------------------------");
-        System.out.println("nprobe = " + nprobes + "\tk = " + k + "\tCoarse Clusters = " + ivf.centroids.length);
+        System.out.println("nprobe = " + nprobes + "\tk = " + k + "\tCoarse Clusters = " + ivf.getC());
         System.out.println("Recall = " + recall * 100f + "%\t" + "Ratio = " + averageRatio);
         System.out.println("Avg Time Per Search = " + timeUsPerQuery + " us\t QPS = " + (1e6 / timeUsPerQuery) + " query/s");
         System.out.println("Total Search Time = " + (totalUsertime / 1e6f) + " sec");
         System.out.println("Error Bound Avg = " + (errorBoundAvg / Q.length));
-        System.out.println("Total Explored KNN = " + totalExploredNNs);
-        System.out.println("Total Comparisons = " + totalComparisons);
         System.out.println("Max Estimator Size = " + maxEstimatorSize);
         System.out.println("Total Estimator Adds = " + totalEstimatorAdds);
     }

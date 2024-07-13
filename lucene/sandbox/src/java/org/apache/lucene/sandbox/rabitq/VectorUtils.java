@@ -5,7 +5,7 @@ import jdk.incubator.vector.VectorSpecies;
 
 import static jdk.incubator.vector.VectorOperators.ADD;
 
-// FIXME: FUTURE - copied from lucene internals for now
+// FIXME: copied from lucene internals for now
 public class VectorUtils {
 
     private static final VectorSpecies<Float> FLOAT_SPECIES = FloatVector.SPECIES_PREFERRED;;

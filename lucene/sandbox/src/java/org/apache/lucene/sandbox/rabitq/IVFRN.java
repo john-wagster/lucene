@@ -6,35 +6,35 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 
 
 public class IVFRN {
-    public Factor[] fac;
+    private Factor[] fac;
 
-    public int N;                        // the number of data vectors
-    public int C;                        // the number of clusters
+    private int N;                        // the number of data vectors
+    private int C;                        // the number of clusters
 
-    public int[] start;                  // the start point of a cluster
-    public int[] len;                    // the length of a cluster
-    public int[] id;                     // N of size_t the ids of the objects in a cluster
-    public float[] distToC;              // N of floats distance to the centroids (not the squared distance)
-    public float[] u;                    // B of floats random numbers sampled from the uniform distribution [0,1]
+    private int[] start;                  // the start point of a cluster
+    private int[] len;                    // the length of a cluster
+    private int[] id;                     // N of size_t the ids of the objects in a cluster
+    private float[] distToC;              // N of floats distance to the centroids (not the squared distance)
+    private float[] u;                    // B of floats random numbers sampled from the uniform distribution [0,1]
 
     // FIXME: FUTURE - make this a byte[] instead??
-    public long[][] binaryCode;          // (B / 64) * N of 64-bit uint64_t
+    private long[][] binaryCode;          // (B / 64) * N of 64-bit uint64_t
 
-    public float[] x0;                   // N of floats in the Random Net algorithm
-    public float[][] centroids;          // N * B floats (not N * D), note that the centroids should be randomized
-    public float[][] data;               // N * D floats, note that the datas are not randomized
+    private float[] x0;                   // N of floats in the Random Net algorithm
+    private float[][] centroids;          // N * B floats (not N * D), note that the centroids should be randomized
+    private int[] dataMapping;
 
     private final int B;
     private final int D;
 
     public IVFRN(float[][] X, float[][] centroids, float[] distToCentroid, float[] _x0, int[] clusterId, long[][] binary) {
+        // FIXME: clean up all the weird offset mgmt ... store mappings instead of repacking data everywhere
+        // FIXME: stop serializing all of X here (in save) ... instead store a mapping
         D = X[0].length;
         B = (D + 63) / 64 * 64;
 
@@ -72,16 +72,16 @@ public class IVFRN {
 
         this.centroids = centroids;
 
-        this.data = new float[N][X[0].length];
+        this.dataMapping = new int[N];
         this.binaryCode = new long[N][B/64];
         for(int i = 0; i < N; i++) {
             int x = id[i];
-            data[i] = X[x];
+            dataMapping[i] = x;
             binaryCode[i] = binary[x];
         }
     }
 
-    private IVFRN(int n, int d, int c, int b, float[][] centroids, float[][] data, long[][] binaryCode, int[] start,
+    private IVFRN(int n, int d, int c, int b, float[][] centroids, int[] dataMapping, long[][] binaryCode, int[] start,
                   int[] len, int[] id, float[] distToC, float[] x0, float[] u, Factor[] fac) {
         this.N = n;
         this.D = d;
@@ -89,7 +89,7 @@ public class IVFRN {
         this.B = b;
 
         this.centroids = centroids;
-        this.data = data;
+        this.dataMapping = dataMapping;
         this.binaryCode = binaryCode;
         this.start = start;
         this.len = len;
@@ -138,10 +138,8 @@ public class IVFRN {
                 }
             }
 
-            for (int i = 0; i < N; i++) {
-                for (int j = 0; j < D; j++) {
-                    bb.putFloat(data[i][j]);
-                }
+            for(int i = 0; i < N; i++) {
+                bb.putInt(dataMapping[i]);
             }
 
             for (int i = 0; i < N; i++) {
@@ -169,7 +167,7 @@ public class IVFRN {
             float max_x1 = (float) (1.9 / Utils.constSqrt(1.0 * B-1.0));
 
             float[][] centroids = new float[C][B];
-            float[][] data = new float[N][D];
+            int[] dataMapping = new int[N];
 
             long[][] binaryCode = new long[N][B / 64];
             int[] start = new int[C];
@@ -209,10 +207,8 @@ public class IVFRN {
                 }
             }
 
-            for (int i = 0; i < N; i++) {
-                for (int j = 0; j < D; j++) {
-                    data[i][j] = bb.getFloat();
-                }
+            for(int i = 0; i < N; i++) {
+                dataMapping[i] = bb.getInt();
             }
 
             for (int i = 0; i < N; i++) {
@@ -226,6 +222,7 @@ public class IVFRN {
                 u[i] = (float) Math.random();
             }
 
+            // FIXME: speed up with panama
             Factor[] fac = new Factor[N];
             for (int i = 0; i < N; i++) {
                 double x_x0 = distToC[i] / x0[i];
@@ -236,11 +233,11 @@ public class IVFRN {
                 fac[i] = new Factor(sqrX, error, factorPPC, factorIP);
             }
 
-            return new IVFRN(N, D, C, B, centroids, data, binaryCode, start, len, id, distToC, x0, u, fac);
+            return new IVFRN(N, D, C, B, centroids, dataMapping, binaryCode, start, len, id, distToC, x0, u, fac);
         }
     }
 
-    public IVFRNResult search(float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) {
+    public IVFRNResult search(float[][] X, float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) {
         //FIXME: FUTURE - implement fast scan and do a comparison
 
         assert nProbe < C;
@@ -265,8 +262,6 @@ public class IVFRN {
         int maxEstimatorSize = 500;
         PriorityQueue<Result> estimatorDistances = new PriorityQueue<>(maxEstimatorSize, Comparator.reverseOrder());
 
-        int totalExploredKNNs = 0;
-        int totalComparisons = 0;
         float errorBoundAvg = 0f;
         int errorBoundTotalCalcs = 0;
         int totalEstimatorQueueAdds = 0;
@@ -327,10 +322,8 @@ public class IVFRN {
         int size = estimatorDistances.size();
         for(int i = 0; i < size; i++) {
             Result res = estimatorDistances.remove();
-            totalComparisons++;
             if (res.sqrY() < distK) {
-                totalExploredKNNs++;
-                float gt_dist = VectorUtils.squareDistance(query, data[res.c()]);
+                float gt_dist = VectorUtils.squareDistance(query, X[dataMapping[res.c()]]);
                 if (gt_dist < distK) {
                     knns.add(new Result(gt_dist, id[res.c()]));
                     if (knns.size() > k) {
@@ -343,8 +336,12 @@ public class IVFRN {
             }
         }
 
-        IVFRNStats stats = new IVFRNStats(totalExploredKNNs, totalComparisons, maxEstimatorSize, totalEstimatorQueueAdds, errorBoundAvg / errorBoundTotalCalcs);
+        IVFRNStats stats = new IVFRNStats(maxEstimatorSize, totalEstimatorQueueAdds, errorBoundAvg / errorBoundTotalCalcs);
         return new IVFRNResult(knns, stats);
+    }
+
+    public int getC() {
+        return this.C;
     }
 }
 

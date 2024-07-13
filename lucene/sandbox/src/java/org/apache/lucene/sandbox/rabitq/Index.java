@@ -62,10 +62,10 @@ public class Index {
 
         // cluster data vectors
         System.out.println("cluster data vectors");
-        IVF index = new IVF(numCentroids);
+        SamplingIVF index = new SamplingIVF(numCentroids);
         index.train(X);
         Centroid[] centroids = index.getCentroids();
-        SearchResult[] results = index.getTrainedVectorCentroid(X);
+        SearchResult[] results = index.search(X);
         float[] distToCentroids = new float[results.length];
         int[] clusterIds = new int[results.length];
         for (int i = 0; i < results.length; i++) {
@@ -81,23 +81,19 @@ public class Index {
     }
 
     private static SubspaceOutput generateSubSpaces(int D, int B, int MAX_BD, float[][] P, float[][] X, float[][] centroids, int[] clusterIds) throws IOException {
-        float[][] XP = MatrixUtils.padColumns(X, MAX_BD-D); // typically no-op
-        float[][] CP = MatrixUtils.padColumns(centroids, MAX_BD-D); // typically no-op
+        float[][] XP = MatrixUtils.padColumns(X, MAX_BD-D); // typically no-op if D/64
+        float[][] CP = MatrixUtils.padColumns(centroids, MAX_BD-D); // typically no-op if D/64
 
         XP = MatrixUtils.dotProduct(XP, P);
         CP = MatrixUtils.dotProduct(CP, P);
         XP = MatrixUtils.subtract(XP, CP, clusterIds);
 
         // The inner product between the data vector and the quantized data vector
-        // FIXME: speed up generate sub spaces by consolidating where reasonable
-        float[][] XPSubset = MatrixUtils.subset(XP, B); // typically no-op
+        float[][] XPSubset = MatrixUtils.subset(XP, B); // typically no-op if D/64
         MatrixUtils.removeSignAndDivide(XPSubset, (float) Math.pow(B, 0.5));
         float[] x0 = MatrixUtils.sumAndNormalize(XPSubset, MatrixUtils.normsForRows(XP));
-        MatrixUtils.replaceInfinite(x0, 0.8f);
 
-        // FIXME: speed up generate sub spaces by consolidating where reasonable
-        boolean[][] binXP = MatrixUtils.greaterThan(XP, 0);
-        long[][] repackedBinXP = MatrixUtils.repackAsUInt64(binXP, B);
+        long[][] repackedBinXP = MatrixUtils.repackAsUInt64(XP, B);
 
         return new SubspaceOutput(P, CP, x0, repackedBinXP);
     }
