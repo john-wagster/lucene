@@ -1,64 +1,36 @@
 package org.apache.lucene.sandbox.rabitq;
 
+import jdk.incubator.vector.FloatVector;
+import jdk.incubator.vector.VectorSpecies;
+
+import java.util.Arrays;
+
 public class MatrixUtils {
-    public static float[][] multiply(float[][] a, float[][] b) {
-        int n = a.length;
-        int dA = a[0].length;
-        int dB = b.length;
-        int dC = b[0].length;
+    private static final VectorSpecies<Float> FLOAT_SPECIES = FloatVector.SPECIES_PREFERRED;;
 
-        if (dA != dB) {
-            throw new RuntimeException("Matrix dimensions mismatch");
-        }
-
-        float[][] C = new float[n][dC];
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < dC; j++) {
-                for (int k = 0; k < dA; k++) {
-                    C[i][j] += a[i][k] * b[k][j];
-                }
-            }
-        }
-
-        return C;
-    }
-
-    public static float[][] multiplyElementWise(float[][] a, float[][] b) {
-        // FIXME: FUTURE - turns out this is not dotproduct as I naively assumed; it's element by element multiplication in numpy ... validate?
-        // FIXME: FUTURE - this is part of a series of transforms (optimize by doing them all at the same time)
-
-        assert a.length == b.length;
-        assert a[0].length == b[0].length;
-
-        float[][] output = new float[a.length][a[0].length];
-
+    public static void removeSignAndDivide(float[][] a, float divisor) {
         for(int i = 0; i < a.length; i++) {
-            for( int j = 0; j < a[0].length; j++) {
-                output[i][j] = a[i][j] * b[i][j];
+            // FIXME: revert to old behavior for small dimensions
+//            for(int j = 0; j < a[0].length; j++) {
+//                a[i][j] = Math.abs(a[i][j]) / divisor;
+//            }
+            int size = a[0].length / FLOAT_SPECIES.length();
+            for(int r = 0; r < size; r++) {
+                int offset = FLOAT_SPECIES.length() * r;
+                FloatVector va = FloatVector.fromArray(FLOAT_SPECIES, a[i], offset);
+                va.abs().div(divisor).intoArray(a[i], offset);
             }
         }
-
-        return output;
     }
 
-    public static float[][] divide(float[][] a, float divisor) {
-        float[][] aDivided = new float[a.length][a[0].length];
-        for(int i = 0; i < a.length; i++) {
-            for(int j = 0; j < a[0].length; j++) {
-                aDivided[i][j] = a[i][j] / divisor;
-            }
-        }
-
-        return aDivided;
-    }
-
-    public static float[][] normalize(float[][] a, float[][] norms) {
+    public static float[] sumAndNormalize(float[][] a, float[] norms) {
         // FIXME: FUTURE - throw errors here for norms being the incorrect or unexpected shape
-        float[][] aDivided = new float[a.length][a[0].length];
+        float[] aDivided = new float[a.length];
         for(int i = 0; i < a.length; i++) {
             for(int j = 0; j < a[0].length; j++) {
-                aDivided[i][j] = a[i][j] / norms[i][0];
+                aDivided[i] += a[i][j];
             }
+            aDivided[i] = aDivided[i] / norms[i];
         }
 
         return aDivided;
@@ -70,107 +42,58 @@ public class MatrixUtils {
         return VectorUtils.squareDistance(vectorA, vectorB);
     }
 
-    public static float distance(float[] a, float[] b) {
-        if ( a.length != b.length ) {
-            throw new RuntimeException("vector distance can only be done on two vectors of the same dimensions");
-        }
-
-        int dimensions = a.length;
-        float dist = 0f;
-        for(int i = 0; i < dimensions; i++) {
-            dist += (a[i] - b[i]) * (a[i] - b[i]);
-        }
-
-        return dist;
-    }
-
-    public static float[][] transpose(float[][] a) {
+    public static void transpose(float[][] a) {
         int m = a.length;
         int n = a[0].length;
-        float[][] result = new float[n][m];
         for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                result[j][i] = a[i][j];
+            for (int j = i+1; j < n; j++) {
+                if( i != j) {
+                    float tmp = a[i][j];
+                    a[i][j] = a[j][i];
+                    a[j][i] = tmp;
+                }
             }
         }
-        return result;
     }
 
-    public static float[][] dotProduct(float[][] x, float[][] p) {
-        int m = x.length;
-        int n = x[0].length;
-        int p_n = p[0].length;
-        if (n != p.length) {
+    public static float[][] dotProduct(float[][] a, float[][] b) {
+        int m = a.length;
+        int n = a[0].length;
+        int bN = b[0].length;
+        if (n != b.length) {
             throw new IllegalArgumentException("Matrices are not compatible for dot product");
         }
-        float[][] result = new float[m][p_n];
+        float[][] result = new float[m][bN];
         for (int i = 0; i < m; i++) {
-            for (int j = 0; j < p_n; j++) {
+            for (int j = 0; j < bN; j++) {
                 for (int k = 0; k < n; k++) {
-                    result[i][j] += x[i][k] * p[k][j];
+                    result[i][j] = Math.fma(a[i][k], b[k][j], result[i][j]);
                 }
             }
         }
         return result;
     }
 
-    public static float[][] indexInto(float[][] a, int[] indicies) {
-        // FIXME: FUTURE - check error conditions
-        // FIXME: FUTURE - speed this up Arrays.copyOf?
-        assert a.length == indicies.length;
-        float[][] subMatrix = new float[indicies.length][a[0].length];
-        for(int i = 0; i < indicies.length; i++) {
-            for (int j = 0; j < a[0].length; j++) {
-                subMatrix[i][j] = a[indicies[i]][j];
-            }
-        }
-        return subMatrix;
-    }
-
     public static float[][] subset(float[][] a, int lastColumn) {
+        if(a.length == lastColumn) {
+            return a;
+        }
         // FIXME: FUTURE - check error conditions
         float[][] subMatrix = new float[a.length][lastColumn];
         for(int i = 0; i < a.length; i++) {
-            for (int j = 0; j < lastColumn; j++) {
-                subMatrix[i][j] = a[i][j];
-            }
+            subMatrix[i] = Arrays.copyOf(a[i], lastColumn);
         }
         return subMatrix;
     }
 
-    public static boolean[][] subset(boolean[][] a, int lastColumn) {
-        // FIXME: FUTURE - check error conditions
-        boolean[][] subMatrix = new boolean[a.length][lastColumn];
-        for(int i = 0; i < a.length; i++) {
-            for (int j = 0; j < lastColumn; j++) {
-                subMatrix[i][j] = a[i][j];
-            }
-        }
-        return subMatrix;
-    }
-
-
-    public static float[][] subtract(float[][] a, float[][] b) {
+    public static float[][] subtract(float[][] a, float[][] b, int[] indicies) {
         // FIXME: FUTURE - check error conditions
         float[][] result = new float[a.length][a[0].length];
         for(int i = 0; i < a.length; i++) {
+            float[] c = b[indicies[i]];
             for(int j = 0; j < a[i].length; j++) {
-                result[i][j] = a[i][j] - b[i][j];
+                result[i][j] = a[i][j] - c[j];
             }
-        }
-
-        return result;
-    }
-
-    public static float[][] sumRows(float[][] a) {
-        // FIXME: FUTURE - check error conditions
-        float[][] result = new float[a.length][1];
-        for(int i = 0; i < a.length; i++) {
-            float rowSum = 0f;
-            for(int j = 0; j < a[i].length; j++) {
-                rowSum += a[i][j];
-            }
-            result[i][0] = rowSum;
         }
 
         return result;
@@ -189,6 +112,9 @@ public class MatrixUtils {
     }
 
     public static float[][] padColumns(float[][] a, int dimension) {
+        if(dimension == 0) {
+            return a;
+        }
         int pad = Math.max(a[0].length, dimension);
         float[][] aPad = new float[a.length][pad];
         for(int i = 0; i < a.length; i++) {
@@ -203,14 +129,14 @@ public class MatrixUtils {
         return aPad;
     }
 
-    public static float[][] normsForRows(float[][] m) {
-        float[][] normalized = new float[m.length][1];
+    public static float[] normsForRows(float[][] m) {
+        float[] normalized = new float[m.length];
         for(int h = 0; h < m.length; h++) {
             float[] vector = m[h];
             // Calculate magnitude/length of the vector
             double magnitude = 0;
             for (int i = 0; i < vector.length; i++) {
-                magnitude += Math.pow(vector[i], 2);
+                magnitude = Math.fma(vector[i], vector[i], magnitude);
             }
             magnitude = Math.sqrt(magnitude);
 
@@ -219,49 +145,23 @@ public class MatrixUtils {
 //                throw new IllegalArgumentException("Cannot normalize a vector of length zero.");
 //            }
 
-            normalized[h][0] = (float) magnitude;
+            normalized[h] = (float) magnitude;
         }
 
         return normalized;
     }
 
-    public static float[][] replaceInfinite(float[][] a, float value) {
+    public static void replaceInfinite(float[] a, float value) {
         // FIXME: FUTURE - handle errors
         for(int i = 0; i < a.length; i++) {
-            for(int j = 0; j < a[0].length; j++) {
-                if (!Float.isFinite(a[i][j])) {
-                    a[i][j] = value;
-                }
+            if (!Float.isFinite(a[i])) {
+                a[i] = value;
             }
         }
-        return a;
-    }
-
-    // FIXME: FUTURE - this could be shorts instead of floats
-    public static float[][] asFloats(boolean[][] a) {
-        // FIXME: FUTURE - error handling
-        float[][] aAsInts = new float[a.length][a[0].length];
-        for(int i = 0; i < a.length; i++) {
-            for(int j = 0; j < a[0].length; j++) {
-                aAsInts[i][j] = (short) (a[i][j] ? 1 : -1);
-            }
-        }
-
-        return aAsInts;
     }
 
     public static boolean[] flatten(boolean[][] a) {
         boolean[] aFlattened = new boolean[a.length * a[0].length];
-        for(int i = 0; i < a.length; i++) {
-            for(int j = 0; j < a[0].length; j++) {
-                aFlattened[i*(a[0].length)+j] = a[i][j];
-            }
-        }
-        return aFlattened;
-    }
-
-    public static float[] flatten(float[][] a) {
-        float[] aFlattened = new float[a.length * a[0].length];
         for(int i = 0; i < a.length; i++) {
             for(int j = 0; j < a[0].length; j++) {
                 aFlattened[i*(a[0].length)+j] = a[i][j];

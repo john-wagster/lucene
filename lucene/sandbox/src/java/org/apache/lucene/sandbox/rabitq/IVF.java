@@ -18,6 +18,10 @@ public class IVF {
     private final int totalClusters;
     private Centroid[] centroids;
 
+    // cache these for now since our only real operation is to get the trained vector distances on search
+    private Map<Integer, SearchResult> vectorToCentroid;
+    private Map<Integer, Set<Integer>> centroidToVectors;
+
     public IVF(int clusters) {
         this.totalClusters = clusters;
     }
@@ -25,9 +29,10 @@ public class IVF {
     public void train(float[][] vectors) {
         // FIXME: FUTURE do error checking ... has to be at least as many vectors as centroids for now
 
-        Map<Integer, Integer> vectorToCentroid = new HashMap<>();
-        Map<Integer, Set<Integer>> centroidToVectors = new HashMap<>();
+        vectorToCentroid = new HashMap<>();
+        centroidToVectors = new HashMap<>();
 
+        // FIXME: build this random selection of of the first N vectors where N is a reasonable set to consider
         // randomly create totalClusters centroids from existing vectors
         this.centroids = new Centroid[totalClusters];
         List<Integer> randomStartVectors = getRandomAndRemove(
@@ -39,7 +44,7 @@ public class IVF {
             HashSet<Integer> vecs = new HashSet<>();
             vecs.add(vectorIndex);
             centroidToVectors.put(i, vecs);
-            vectorToCentroid.put(vectorIndex, i);
+            vectorToCentroid.put(vectorIndex, new SearchResult(-1f, i));
         }
 
         // iterate through all vectors until the centroids stop moving around
@@ -56,7 +61,8 @@ public class IVF {
             stable = true;
 
             for(int i = 0; i < vectors.length; i++) {
-                int priorCentroid = vectorToCentroid.getOrDefault(i, -1);
+                SearchResult activeVecMetadata = vectorToCentroid.getOrDefault(i, new SearchResult(-1, -1));
+                int priorCentroid = activeVecMetadata.getClusterId();
                 float smallestDToCentroid = Float.MAX_VALUE;
                 int centroid = -1;
                 for(int j = 0; j < centroids.length; j++) {
@@ -67,12 +73,14 @@ public class IVF {
                     }
                 }
                 Set<Integer> vectorIds = centroidToVectors.get(centroid);
+                activeVecMetadata.setDistToCentroid(smallestDToCentroid);
                 if(vectorIds.add(i)) {
                     stable = false;
                     if(priorCentroid != -1) {
                         centroidToVectors.get(priorCentroid).remove(i);
                     }
-                    vectorToCentroid.put(i, centroid);
+                    activeVecMetadata.setClusterId(centroid);
+                    vectorToCentroid.put(i, activeVecMetadata);
                 }
             }
 
@@ -116,23 +124,17 @@ public class IVF {
         return centroids;
     }
 
-    public SearchResult[] search(float[][] vectors) {
-        // FIXME: FUTURE - knn instead of 1nn
-        // FIXME: FUTURE - dedup this logic from above in train function
-        SearchResult[] searchResults = new SearchResult[vectors.length];
-
-        for (int i = 0; i < vectors.length; i++) {
-            float smallestDToCentroid = Float.MAX_VALUE;
-            int centroid = -1;
-            for (int j = 0; j < centroids.length; j++) {
-                // FIXME: FUTURE - replace all instances of this with the VectorUtil using Panama?? (internal VectorUtil)
-                float d = VectorUtils.squareDistance(centroids[j].getVector(), vectors[i]);
-                if( d < smallestDToCentroid) {
-                    smallestDToCentroid = d;
-                    centroid = j;
-                }
+    public SearchResult[] getTrainedVectorCentroid(float[][] vectors) {
+        // relies on the assumption that vectors is in the same order it was sent for training
+        int size = this.vectorToCentroid.size();
+        SearchResult[] searchResults = new SearchResult[size];
+        for(int i = 0; i < size; i++) {
+            SearchResult res = this.vectorToCentroid.get(i);
+            if (res.getDistToCentroid() < 0) {
+                float d = VectorUtils.squareDistance(centroids[res.getClusterId()].getVector(), vectors[i]);
+                res.setDistToCentroid(d);
             }
-            searchResults[i] = new SearchResult(smallestDToCentroid, centroids[centroid].getId());
+            searchResults[i] = res;
         }
         return searchResults;
     }

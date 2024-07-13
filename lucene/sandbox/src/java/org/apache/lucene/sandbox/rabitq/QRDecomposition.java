@@ -4,18 +4,15 @@ package org.apache.lucene.sandbox.rabitq;
 public class QRDecomposition {
     private float[][] qrt;
     private float[] rDiag;
-    private float[][] cachedQ;
-    private float[][] cachedQT;
 
     public QRDecomposition(float[][] matrix) {
         final int m = matrix.length;
         final int n = matrix[0].length;
-        qrt = MatrixUtils.transpose(matrix);
+        MatrixUtils.transpose(matrix);
+        this.qrt = matrix;
         rDiag = new float[Math.min(m, n)];
-        cachedQ = null;
-        cachedQT = null;
 
-        decompose(qrt);
+        decompose(matrix);
     }
 
     protected void decompose(float[][] matrix) {
@@ -55,43 +52,33 @@ public class QRDecomposition {
         }
     }
 
-    public float[][] getQ() {
-        if (cachedQ == null) {
-            cachedQ = MatrixUtils.transpose(getQT());
-        }
-        return cachedQ;
-    }
-
     public float[][] getQT() {
-        if (cachedQT == null) {
-            final int n = qrt.length;
-            final int m = qrt[0].length;
-            float[][] qta = new float[m][m];
+        final int n = qrt.length;
+        final int m = qrt[0].length;
+        float[][] qta = new float[m][m];
 
-            for (int minor = m - 1; minor >= Math.min(m, n); minor--) {
-                qta[minor][minor] = 1.0f;
-            }
+        for (int minor = m - 1; minor >= Math.min(m, n); minor--) {
+            qta[minor][minor] = 1.0f;
+        }
 
-            for (int minor = Math.min(m, n) - 1; minor >= 0; minor--) {
-                final float[] qrtMinor = qrt[minor];
-                qta[minor][minor] = 1.0f;
-                if (qrtMinor[minor] != 0.0) {
-                    for (int col = minor; col < m; col++) {
-                        double alpha = 0;
-                        for (int row = minor; row < m; row++) {
-                            alpha -= qta[col][row] * qrtMinor[row];
-                        }
-                        alpha /= rDiag[minor] * qrtMinor[minor];
+        for (int minor = Math.min(m, n) - 1; minor >= 0; minor--) {
+            final float[] qrtMinor = qrt[minor];
+            qta[minor][minor] = 1.0f;
+            if (qrtMinor[minor] != 0.0) {
+                for (int col = minor; col < m; col++) {
+                    double alpha = 0;
+                    for (int row = minor; row < m; row++) {
+                        alpha -= qta[col][row] * qrtMinor[row];
+                    }
+                    alpha /= rDiag[minor] * qrtMinor[minor];
 
-                        for (int row = minor; row < m; row++) {
-                            qta[col][row] += -alpha * qrtMinor[row];
-                        }
+                    for (int row = minor; row < m; row++) {
+                        qta[col][row] += -alpha * qrtMinor[row];
                     }
                 }
             }
-            cachedQT = qta;
         }
 
-        return cachedQT;
+        return qta;
     }
 }

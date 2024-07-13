@@ -8,9 +8,10 @@ import java.util.PriorityQueue;
 public class Search {
 
     public static void main(String[] args) throws Exception {
-        // FIXME: FUTURE - use fastscan to search over the ivfrn?
-        // FIXME: FUTURE - get metrics setup appropriately as needed
-        // FIXME: FUTURE - better arg parsing
+        // FIXME: use fastscan to search over the ivfrn
+        // FIXME: better arg parsing
+        // FIXME: clean up gross path mgmt
+        // FIXME: use logging instead of println
 
         // search DIRECTORY_TO_DATASET DATASET_NAME NUM_CENTROIDS DIMENSIONS B_QUERY OUTPUT_PATH
         String source = args[0];  // eg "/Users/jwagster/Desktop/gist1m/gist/"
@@ -21,10 +22,8 @@ public class Search {
         int k = Integer.parseInt(args[5]);
         String resultPath = args[6];  // eg "/Users/jwagster/Desktop/gist1m/ivfrn_output/"
 
-        // FIXME: FUTURE - clean up these constants
         int B = (dimensions + 63) / 64 * 64;
 
-        // FIXME: FUTURE - clean up gross path mgmt
         String queryPath = String.format("%s%s_query.fvecs", source, dataset);
         float[][] Q = IOUtils.readFvecs(new FileInputStream(queryPath));
 
@@ -45,7 +44,7 @@ public class Search {
         writer.close();
 
         IVFRN ivfrn = IVFRN.load(indexPath);
-        float[][] RandQ = MatrixUtils.multiply(Q, P);
+        float[][] RandQ = MatrixUtils.dotProduct(Q, P);
 
         test(Q, RandQ, X, G, ivfrn, k, B_QUERY);
     }
@@ -53,7 +52,7 @@ public class Search {
     public static void test(float[][] Q, float[][] RandQ, float[][] X, int[][] G, IVFRN ivf, int k, int B_QUERY) {
 
         int nprobes = 300;
-        nprobes = Math.min(nprobes, ivf.C); // FIXME: FUTURE - hardcoded
+        nprobes = Math.min(nprobes, ivf.C); // FIXME: hardcoded
         assert nprobes <= k;
 
         float totalUsertime = 0;
@@ -89,8 +88,6 @@ public class Search {
                 }
             }
             correctCount += correct;
-            // FIXME: FUTURE - use logging instead
-//            System.out.println("recall = " + correct + " / " + k + " " + (i + 1) + " / " + Q.length + " " + usertime + " us" + " err bound avg = " + stats.errorBoundAvg() + " nn explored = " + stats.totalExploredNNs());
 
             if (i % 1500 == 0) {
                 System.out.print(".");
@@ -104,12 +101,11 @@ public class Search {
         }
         System.out.println();
 
-        // FIXME: FUTURE - missing rotation time?
+        // FIXME: missing rotation time?
         float timeUsPerQuery = totalUsertime / Q.length;
         float recall = (float) correctCount / (Q.length * k);
         float averageRatio = totalRatio / (Q.length * k);
 
-        // FIXME: FUTURE - logs instead of println
         System.out.println("------------------------------------------------");
         System.out.println("nprobe = " + nprobes + "\tk = " + k + "\tCoarse Clusters = " + ivf.centroids.length);
         System.out.println("Recall = " + recall * 100f + "%\t" + "Ratio = " + averageRatio);

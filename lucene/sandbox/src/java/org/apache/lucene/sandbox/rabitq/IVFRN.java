@@ -261,6 +261,7 @@ public class IVFRN {
         }
 
         // FIXME: FUTURE - don't use the Result class for this; it's confusing
+        // FIXME: FUTURE - hardcoded
         int maxEstimatorSize = 500;
         PriorityQueue<Result> estimatorDistances = new PriorityQueue<>(maxEstimatorSize, Comparator.reverseOrder());
 
