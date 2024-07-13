@@ -7,7 +7,12 @@ public class SpaceUtils {
     public static int popcount(long[] d, int B) {
         int ret = 0;
         for (int i = 0; i < B / 64; i++) {
+            // FIXME: implement this in C because Long.bitCount is not optimized
+            // FIXME: Integer.bitCount used like this is still slower than Long.bitCount
+            // FIXME: a more comprehensive refactor to remove longs and replace with ints is non-trivial
             ret += Long.bitCount(d[i]);
+//            ret += Integer.bitCount((int)(d[i] & 0x00000000ffffffffL));
+//            ret += Integer.bitCount((int)((d[i] & 0xffffffff00000000L) >>> 32));
         }
         return ret;
     }
@@ -17,7 +22,13 @@ public class SpaceUtils {
         for (int i = 0; i < B_QUERY; i++) {
             long subRet = 0;
             for (int j = 0; j < B / 64; j++) {
-                subRet += Long.bitCount(q[i*(B / 64)+j] & d[j]);
+                // FIXME: implement this in C because Long.bitCount is not optimized
+                // FIXME: Integer.bitCount used like this is still slower than Long.bitCount
+                // FIXME: a more comprehensive refactor to remove longs and replace with ints is non-trivial
+                long estimatedDist = q[i*(B / 64)+j] & d[j];
+                subRet += Long.bitCount(estimatedDist);
+//                subRet += Integer.bitCount((int)(estimatedDist & 0x00000000ffffffffL));
+//                subRet += Integer.bitCount((int)((estimatedDist & 0xffffffff00000000L) >>> 32));
             }
             ret += subRet << i;
         }

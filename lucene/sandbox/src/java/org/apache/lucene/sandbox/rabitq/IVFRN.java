@@ -111,7 +111,7 @@ public class IVFRN {
             fc.write(bb);
 
             //start, len, id, distToC, x0, centroids, data, binaryCode
-            bb = ByteBuffer.allocate(4*C + 4*C + 4*N + 4*N + 4*N + 4*C*B + 4*N*D + 8*N*B/64).order(ByteOrder.LITTLE_ENDIAN);
+            bb = ByteBuffer.allocate(4*C + 4*C + 4*N + 4*N + 4*N).order(ByteOrder.LITTLE_ENDIAN);
             for (int i = 0; i < C; i++) {
                 bb.putInt(start[i]);
             }
@@ -131,25 +131,33 @@ public class IVFRN {
             for (int i = 0; i < N; i++) {
                 bb.putFloat(x0[i]);
             }
+            bb.flip();
+            fc.write(bb);
 
+            bb = ByteBuffer.allocate(4*C*B).order(ByteOrder.LITTLE_ENDIAN);
             for (int i = 0; i < C; i++) {
                 for (int j = 0; j < B; j++) {
                     bb.putFloat(centroids[i][j]);
                 }
             }
+            bb.flip();
+            fc.write(bb);
 
+            bb = ByteBuffer.allocate(4*N).order(ByteOrder.LITTLE_ENDIAN);
             for(int i = 0; i < N; i++) {
                 bb.putInt(dataMapping[i]);
             }
+            bb.flip();
+            fc.write(bb);
 
             for (int i = 0; i < N; i++) {
+                bb = ByteBuffer.allocate(8*B/64).order(ByteOrder.LITTLE_ENDIAN);
                 for (int j = 0; j < B / 64; j++) {
                     bb.putLong(binaryCode[i][j]);
                 }
+                bb.flip();
+                fc.write(bb);
             }
-
-            bb.flip();
-            fc.write(bb);
         }
     }
 
@@ -177,7 +185,7 @@ public class IVFRN {
             float[] x0 = new float[N];
 
             //start, len, id, distToC, x0, centroids, data, binaryCode
-            bb = ByteBuffer.allocate(4*C + 4*C + 4*N + 4*N + 4*N + 4*C*B + 4*N*D + 8*N*B/64).order(ByteOrder.LITTLE_ENDIAN);
+            bb = ByteBuffer.allocate(4*C + 4*C + 4*N + 4*N + 4*N).order(ByteOrder.LITTLE_ENDIAN);
             fc.read(bb);
             bb.flip();
 
@@ -201,17 +209,26 @@ public class IVFRN {
                 x0[i] = bb.getFloat();
             }
 
+            bb = ByteBuffer.allocate(4*C*B).order(ByteOrder.LITTLE_ENDIAN);
+            fc.read(bb);
+            bb.flip();
             for (int i = 0; i < C; i++) {
                 for (int j = 0; j < B; j++) {
                     centroids[i][j] = bb.getFloat();
                 }
             }
 
+            bb = ByteBuffer.allocate(4*N).order(ByteOrder.LITTLE_ENDIAN);
+            fc.read(bb);
+            bb.flip();
             for(int i = 0; i < N; i++) {
                 dataMapping[i] = bb.getInt();
             }
 
             for (int i = 0; i < N; i++) {
+                bb = ByteBuffer.allocate(8*B/64).order(ByteOrder.LITTLE_ENDIAN);
+                fc.read(bb);
+                bb.flip();
                 for (int j = 0; j < B / 64; j++) {
                     binaryCode[i][j] = bb.getLong();
                 }
