@@ -19,13 +19,14 @@ public class SpaceUtils {
 
     public static long ipByteBin(long[] q, long[] d, int B_QUERY, int B) {
         long ret = 0;
+        int size = B / 64;
         for (int i = 0; i < B_QUERY; i++) {
             long subRet = 0;
-            for (int j = 0; j < B / 64; j++) {
+            for (int j = 0; j < size; j++) {
                 // FIXME: implement this in C because Long.bitCount is not optimized
                 // FIXME: Integer.bitCount used like this is still slower than Long.bitCount
                 // FIXME: a more comprehensive refactor to remove longs and replace with ints is non-trivial
-                long estimatedDist = q[i*(B / 64)+j] & d[j];
+                long estimatedDist = q[i*size+j] & d[j];
                 subRet += Long.bitCount(estimatedDist);
 //                subRet += Integer.bitCount((int)(estimatedDist & 0x00000000ffffffffL));
 //                subRet += Integer.bitCount((int)((estimatedDist & 0xffffffff00000000L) >>> 32));

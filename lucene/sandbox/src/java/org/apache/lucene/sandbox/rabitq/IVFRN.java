@@ -258,9 +258,7 @@ public class IVFRN {
         //FIXME: FUTURE - implement fast scan and do a comparison
 
         assert nProbe < C;
-
         float distK = Float.MAX_VALUE;
-
         PriorityQueue<Result> knns = new PriorityQueue<>(k, Comparator.reverseOrder());
 
         // Find out the nearest N_{probe} centroids to the query vector.
@@ -303,20 +301,16 @@ public class IVFRN {
             long[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
 
             int startC = start[c];
-
-            int len_sub = len[c];
-            float sqr_y = sqrY;
-            float sumq = sumQ;
-
-            float y = (float) Math.sqrt(sqr_y);
+            float y = (float) Math.sqrt(sqrY);
 
             int facCounter = startC;
             int bCounter = startC;
 
-            for (int i = 0; i < len_sub; i++) {
-                float tmpDist = fac[facCounter].sqrX() + sqr_y + fac[facCounter].factorPPC() * vl +
-                        (SpaceUtils.ipByteBin(quantQuery, binaryCode[bCounter], B_QUERY, B) * 2 - sumq) *
-                                fac[facCounter].factorIP() * width;
+            for (int i = 0; i < len[c]; i++) {
+                long qcDist = SpaceUtils.ipByteBin(quantQuery, binaryCode[bCounter], B_QUERY, B);
+
+                float tmpDist = fac[facCounter].sqrX() + sqrY + fac[facCounter].factorPPC() * vl +
+                        (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
                 float errorBound = y * (fac[facCounter].error());
                 float estimator = tmpDist - errorBound;
 
