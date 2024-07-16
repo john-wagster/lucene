@@ -3,6 +3,9 @@ package org.apache.lucene.sandbox.rabitq;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.PriorityQueue;
 
 public class Search {
@@ -28,7 +31,7 @@ public class Search {
         float[][] Q = IOUtils.readFvecs(new FileInputStream(queryPath));
 
         String dataPath = String.format("%s%s_base.fvecs", source, dataset);
-        float[][] X = IOUtils.readFvecs(new FileInputStream(dataPath));
+//        float[][] X = IOUtils.readFvecs(new FileInputStream(dataPath));
 
         String groundTruthPath = String.format("%s%s_groundtruth.ivecs", source, dataset);
         int[][] G = IOUtils.readIvecs(new FileInputStream(groundTruthPath));
@@ -46,10 +49,10 @@ public class Search {
         IVFRN ivfrn = IVFRN.load(indexPath);
         float[][] RandQ = MatrixUtils.dotProduct(Q, P);
 
-        test(Q, RandQ, X, G, ivfrn, k, B_QUERY);
+        test(Q, RandQ, Paths.get(dataPath), G, ivfrn, k, B_QUERY, dimensions);
     }
 
-    public static void test(float[][] Q, float[][] RandQ, float[][] X, int[][] G, IVFRN ivf, int k, int B_QUERY) {
+    public static void test(float[][] Q, float[][] RandQ, Path XPath, int[][] G, IVFRN ivf, int k, int B_QUERY, int dimensions) throws IOException {
 
         int nprobes = 300;
         nprobes = Math.min(nprobes, ivf.getC()); // FIXME: hardcoded
@@ -65,7 +68,7 @@ public class Search {
         System.out.println("Starting search");
         for (int i = 0; i < Q.length; i++) {
             long startTime = System.nanoTime();
-            IVFRNResult result = ivf.search(X, Q[i], RandQ[i], k, nprobes, B_QUERY);
+            IVFRNResult result = ivf.search(XPath, Q[i], RandQ[i], k, nprobes, B_QUERY);
             PriorityQueue<Result> KNNs = result.results();
             IVFRNStats stats = result.stats();
             float usertime = (System.nanoTime() - startTime) / 1e3f; // convert to microseconds to compare to the c impl
@@ -73,7 +76,7 @@ public class Search {
 
             PriorityQueue<Result> copyOfKNN = new PriorityQueue<>();
             copyOfKNN.addAll(KNNs);
-            float ratio = Utils.getRatio(i, Q, X, G, copyOfKNN);
+            float ratio = Utils.getRatio(i, Q, XPath, G, copyOfKNN, dimensions);
             totalRatio += ratio;
 
             int correct = 0;

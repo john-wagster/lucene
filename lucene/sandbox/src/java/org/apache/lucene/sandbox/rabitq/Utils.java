@@ -1,5 +1,9 @@
 package org.apache.lucene.sandbox.rabitq;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.PriorityQueue;
 
 public class Utils {
@@ -13,13 +17,16 @@ public class Utils {
                 : Double.NaN;
     }
 
-    public static float getRatio(int q, float[][] Q, float[][] X, int[][] G, PriorityQueue<Result> KNNs) {
+    public static float getRatio(int q, float[][] Q, Path XPath, int[][] G, PriorityQueue<Result> KNNs, int dimensions) throws IOException {
         PriorityQueue<Result> gt = new PriorityQueue<>();
         int k = KNNs.size();
         for (int i = 0; i < k; i++) {
-            float sqrY = MatrixUtils.distance(Q, q, X, G[q][i]);
-            int c = G[q][i];
-            gt.add(new Result(sqrY, c));
+            try(FileInputStream fis = new FileInputStream(XPath.toFile())) {
+                float[] vector = IOUtils.fetchFvecsEntry(fis, dimensions, G[q][i]);
+                float sqrY = MatrixUtils.distance(Q, q, vector);
+                int c = G[q][i];
+                gt.add(new Result(sqrY, c));
+            }
         }
         double ret = 0;
         int validK = 0;

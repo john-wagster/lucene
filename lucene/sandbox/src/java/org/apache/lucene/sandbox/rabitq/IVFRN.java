@@ -1,13 +1,17 @@
 package org.apache.lucene.sandbox.rabitq;
 
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
+import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.PriorityQueue;
+import java.util.Random;
 
 
 public class IVFRN {
@@ -32,13 +36,15 @@ public class IVFRN {
     private final int B;
     private final int D;
 
-    public IVFRN(float[][] X, float[][] centroids, float[] distToCentroid, float[] _x0, int[] clusterId, long[][] binary) {
+    public IVFRN(Path XPath, float[][] centroids, float[] distToCentroid, float[] _x0, int[] clusterId, long[][] binary, int dimensions) throws IOException {
         // FIXME: clean up all the weird offset mgmt ... store mappings instead of repacking data everywhere
         // FIXME: stop serializing all of X here (in save) ... instead store a mapping
-        D = X[0].length;
+        D = dimensions;
         B = (D + 63) / 64 * 64;
 
-        N = X.length;
+        try(FileInputStream fis = new FileInputStream(XPath.toFile())) {
+            N = IOUtils.getTotalFvecs(fis, dimensions);
+        }
         C = centroids.length;
 
         // Check if B is greater than or equal to D
@@ -234,9 +240,10 @@ public class IVFRN {
                 }
             }
 
+            Random random = new Random(1);
             float[] u = new float[B];
             for (int i = 0; i < B; i++) {
-                u[i] = (float) Math.random();
+                u[i] = (float) random.nextDouble();
             }
 
             // FIXME: speed up with panama
@@ -254,7 +261,7 @@ public class IVFRN {
         }
     }
 
-    public IVFRNResult search(float[][] X, float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) {
+    public IVFRNResult search(Path XPath, float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) throws IOException {
         //FIXME: FUTURE - implement fast scan and do a comparison
 
         assert nProbe < C;
@@ -334,14 +341,18 @@ public class IVFRN {
         for(int i = 0; i < size; i++) {
             Result res = estimatorDistances.remove();
             if (res.sqrY() < distK) {
-                float gt_dist = VectorUtils.squareDistance(query, X[dataMapping[res.c()]]);
-                if (gt_dist < distK) {
-                    knns.add(new Result(gt_dist, id[res.c()]));
-                    if (knns.size() > k) {
-                        knns.remove();
-                    }
-                    if (knns.size() == k) {
-                        distK = knns.peek().sqrY();
+                // FIXME: reuse the same stream and channel to speed this up
+                try(FileInputStream fis = new FileInputStream(XPath.toFile())) {
+                    float[] vector = IOUtils.fetchFvecsEntry(fis, D, dataMapping[res.c()]);
+                    float gt_dist = VectorUtils.squareDistance(query, vector);
+                    if (gt_dist < distK) {
+                        knns.add(new Result(gt_dist, id[res.c()]));
+                        if (knns.size() > k) {
+                            knns.remove();
+                        }
+                        if (knns.size() == k) {
+                            distK = knns.peek().sqrY();
+                        }
                     }
                 }
             }

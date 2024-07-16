@@ -9,6 +9,37 @@ import java.nio.channels.FileChannel;
 
 public class IOUtils {
 
+    public static FvecsStream createFvecsStream(FileInputStream stream, int dimensions) throws IOException {
+        return createFvecsStream(stream, dimensions, 10000);
+    }
+
+    public static FvecsStream createFvecsStream(FileInputStream stream, int dimensions, int cacheSize) throws IOException {
+        return new FvecsStream(stream, dimensions, cacheSize);
+    }
+
+    public static int getTotalFvecs(FileInputStream stream, int dimensions) throws IOException {
+        FileChannel fc = stream.getChannel();
+        long fsize = fc.size();
+        return (int) ((fsize) / (dimensions * 4 + 4));
+    }
+
+    public static float[] fetchFvecsEntry(FileInputStream stream, int dimensions, int vectorIndex) throws IOException {
+        FileChannel fc = stream.getChannel();  // FIXME: manage the channel outside of this function for performance??
+        fc.position(vectorIndex * (4+4*dimensions));
+
+        ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+        fc.read(bb);
+        bb.flip();
+
+        float[] data = new float[dimensions];
+        bb = ByteBuffer.allocate(dimensions*4).order(ByteOrder.LITTLE_ENDIAN);
+        fc.read(bb);
+        bb.flip();
+        bb.asFloatBuffer().get(data);
+
+        return data;
+    }
+
     public static float[][] readFvecs(FileInputStream stream) throws IOException {
         FileChannel fc = stream.getChannel();
 
@@ -103,5 +134,6 @@ public class IOUtils {
             fc.write(bb);
         }
     }
+
 }
 

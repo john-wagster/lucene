@@ -1,5 +1,9 @@
 package org.apache.lucene.sandbox.rabitq;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -25,10 +29,10 @@ public class SamplingIVF {
         this.totalClusters = clusters;
     }
 
-    public void train(float[][] vectors) {
+    public void train(Path vectorsPath, int dimensions) throws IOException {
         // FIXME: FUTURE do error checking ... has to be at least as many vectors as centroids for now
 
-        int dimensions = vectors[0].length;
+        int vectorsLength = IOUtils.getTotalFvecs(new FileInputStream(vectorsPath.toFile()), dimensions);
 
         vectorToCentroid = new HashMap<>();
         centroidToVectors = new HashMap<>();
@@ -37,15 +41,17 @@ public class SamplingIVF {
         // randomly create totalClusters centroids from existing vectors
         this.centroids = new Centroid[totalClusters];
         List<Integer> randomStartVectors = getRandomAndRemove(
-                IntStream.range(0, vectors.length).boxed().collect(Collectors.toList()),
-                totalClusters);
+                IntStream.range(0, vectorsLength).boxed().collect(Collectors.toList()), totalClusters);
         for (int i = 0; i < totalClusters; i++) {
             int vectorIndex = randomStartVectors.get(i);
-            this.centroids[i] = new Centroid(i, vectors[vectorIndex].clone());
-            HashSet<Integer> vecs = new HashSet<>();
-            vecs.add(vectorIndex);
-            centroidToVectors.put(i, vecs);
-            vectorToCentroid.put(vectorIndex, new SearchResult(-1f, i));
+            try(FileInputStream fis = new FileInputStream(vectorsPath.toFile())) {
+                float[] vector = IOUtils.fetchFvecsEntry(fis, dimensions, vectorIndex);
+                this.centroids[i] = new Centroid(i, vector);
+                HashSet<Integer> vecs = new HashSet<>();
+                vecs.add(vectorIndex);
+                centroidToVectors.put(i, vecs);
+                vectorToCentroid.put(vectorIndex, new SearchResult(-1f, i));
+            }
         }
 
         // FIXME: FUTURE - replace w logging
@@ -56,27 +62,30 @@ public class SamplingIVF {
         while (iterations < maxIterations) {
 
             List<Integer> exploredVectors = getRandomAndRemove(
-                    IntStream.range(0, vectors.length).boxed().collect(Collectors.toList()),
-                    (int) (vectors.length * 0.10));
+                    IntStream.range(0, vectorsLength).boxed().collect(Collectors.toList()),
+                    (int) (vectorsLength * 0.10));
 
             centroidToVectors = new HashMap<>();
 
             // FIXME: reintroduce idea of stable state and quit early
             for(int q = 0; q < exploredVectors.size(); q++) {
                 int i = exploredVectors.get(q);
+                try(FileInputStream fis = new FileInputStream(vectorsPath.toFile())) {
+                    float[] vector = IOUtils.fetchFvecsEntry(fis, dimensions, i);
 
-                float smallestDToCentroid = Float.MAX_VALUE;
-                int centroid = -1;
-                for(int j = 0; j < centroids.length; j++) {
-                    float d = VectorUtils.squareDistance(centroids[j].getVector(), vectors[i]);
-                    if(d < smallestDToCentroid) {
-                        smallestDToCentroid = d;
-                        centroid = j;
+                    float smallestDToCentroid = Float.MAX_VALUE;
+                    int centroid = -1;
+                    for (int j = 0; j < centroids.length; j++) {
+                        float d = VectorUtils.squareDistance(centroids[j].getVector(), vector);
+                        if (d < smallestDToCentroid) {
+                            smallestDToCentroid = d;
+                            centroid = j;
+                        }
                     }
+                    Set<Integer> vectorIds = centroidToVectors.getOrDefault(centroid, new HashSet<>());
+                    vectorIds.add(i);
+                    centroidToVectors.putIfAbsent(centroid, vectorIds);
                 }
-                Set<Integer> vectorIds = centroidToVectors.getOrDefault(centroid, new HashSet<>());
-                vectorIds.add(i);
-                centroidToVectors.putIfAbsent(centroid, vectorIds);
             }
 
             // for each of the associated nearest vectors move the centroid closer to them
@@ -90,8 +99,11 @@ public class SamplingIVF {
                 // FIXME: FUTURE - this produces a potential set of NaN vectors when no vectors are near the centroid; exclude those centroids?
                 double[] sums = new double[dimensions];
                 for (int vecId : vectorIds) {
-                    for (int a = 0; a < dimensions; a++) {
-                        sums[a] += vectors[vecId][a];
+                    try(FileInputStream fis = new FileInputStream(vectorsPath.toFile())) {
+                        float[] vector = IOUtils.fetchFvecsEntry(fis, dimensions, vecId);
+                        for (int a = 0; a < dimensions; a++) {
+                            sums[a] += vector[a];
+                        }
                     }
                 }
                 for(int j = 0; j < sums.length; j++) {
@@ -105,20 +117,25 @@ public class SamplingIVF {
 
             iterations++;
         }
+        System.out.println();
     }
 
     public Centroid[] getCentroids() {
         return centroids;
     }
 
-    public SearchResult[] search(float[][] vectors) {
-        SearchResult[] searchResults = new SearchResult[vectors.length];
+    public SearchResult[] search(FvecsStream vectorStream) throws IOException {
+        int vectorsLength = vectorStream.getTotalFvecs();
 
-        for (int i = 0; i < vectors.length; i++) {
+        SearchResult[] searchResults = new SearchResult[vectorsLength];
+
+        for (int i = 0; i < vectorsLength; i++) {
+            float[] vector = vectorStream.getNextFvec();
+
             float smallestDToCentroid = Float.MAX_VALUE;
             int centroid = -1;
             for (int j = 0; j < centroids.length; j++) {
-                float d = VectorUtils.squareDistance(centroids[j].getVector(), vectors[i]);
+                float d = VectorUtils.squareDistance(centroids[j].getVector(), vector);
                 if( d < smallestDToCentroid) {
                     smallestDToCentroid = d;
                     centroid = j;
