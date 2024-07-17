@@ -20,8 +20,8 @@ public class Utils {
     public static float getRatio(int q, float[][] Q, Path XPath, int[][] G, PriorityQueue<Result> KNNs, int dimensions) throws IOException {
         PriorityQueue<Result> gt = new PriorityQueue<>();
         int k = KNNs.size();
-        for (int i = 0; i < k; i++) {
-            try(FileInputStream fis = new FileInputStream(XPath.toFile())) {
+        try(FileInputStream fis = new FileInputStream(XPath.toFile())) {
+            for (int i = 0; i < k; i++) {
                 float[] vector = IOUtils.fetchFvecsEntry(fis, dimensions, G[q][i]);
                 float sqrY = MatrixUtils.distance(Q, q, vector);
                 int c = G[q][i];

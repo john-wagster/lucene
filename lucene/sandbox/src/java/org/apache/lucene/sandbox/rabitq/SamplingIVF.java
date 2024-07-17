@@ -32,7 +32,7 @@ public class SamplingIVF {
     public void train(Path vectorsPath, int dimensions) throws IOException {
         // FIXME: FUTURE do error checking ... has to be at least as many vectors as centroids for now
 
-        int vectorsLength = IOUtils.getTotalFvecs(new FileInputStream(vectorsPath.toFile()), dimensions);
+        int vectorsLength = IOUtils.getTotalFvecs(vectorsPath, dimensions);
 
         vectorToCentroid = new HashMap<>();
         centroidToVectors = new HashMap<>();
@@ -42,9 +42,9 @@ public class SamplingIVF {
         this.centroids = new Centroid[totalClusters];
         List<Integer> randomStartVectors = getRandomAndRemove(
                 IntStream.range(0, vectorsLength).boxed().collect(Collectors.toList()), totalClusters);
-        for (int i = 0; i < totalClusters; i++) {
-            int vectorIndex = randomStartVectors.get(i);
-            try(FileInputStream fis = new FileInputStream(vectorsPath.toFile())) {
+        try(FileInputStream fis = new FileInputStream(vectorsPath.toFile())) {
+            for (int i = 0; i < totalClusters; i++) {
+                int vectorIndex = randomStartVectors.get(i);
                 float[] vector = IOUtils.fetchFvecsEntry(fis, dimensions, vectorIndex);
                 this.centroids[i] = new Centroid(i, vector);
                 HashSet<Integer> vecs = new HashSet<>();
@@ -67,10 +67,11 @@ public class SamplingIVF {
 
             centroidToVectors = new HashMap<>();
 
+
             // FIXME: reintroduce idea of stable state and quit early
-            for(int q = 0; q < exploredVectors.size(); q++) {
-                int i = exploredVectors.get(q);
-                try(FileInputStream fis = new FileInputStream(vectorsPath.toFile())) {
+            try(FileInputStream fis = new FileInputStream(vectorsPath.toFile())) {
+                for(int q = 0; q < exploredVectors.size(); q++) {
+                    int i = exploredVectors.get(q);
                     float[] vector = IOUtils.fetchFvecsEntry(fis, dimensions, i);
 
                     float smallestDToCentroid = Float.MAX_VALUE;
@@ -88,28 +89,28 @@ public class SamplingIVF {
                 }
             }
 
-            // for each of the associated nearest vectors move the centroid closer to them
-            for(int i = 0; i < centroids.length; i++) {
-                Set<Integer> vectorIds = centroidToVectors.getOrDefault(i, new HashSet<>());
+            try(FileInputStream fis = new FileInputStream(vectorsPath.toFile())) {
+                // for each of the associated nearest vectors move the centroid closer to them
+                for (int i = 0; i < centroids.length; i++) {
+                    Set<Integer> vectorIds = centroidToVectors.getOrDefault(i, new HashSet<>());
 
-                if(vectorIds.isEmpty()) {
-                    continue;
-                }
+                    if (vectorIds.isEmpty()) {
+                        continue;
+                    }
 
-                // FIXME: FUTURE - this produces a potential set of NaN vectors when no vectors are near the centroid; exclude those centroids?
-                double[] sums = new double[dimensions];
-                for (int vecId : vectorIds) {
-                    try(FileInputStream fis = new FileInputStream(vectorsPath.toFile())) {
+                    // FIXME: FUTURE - this produces a potential set of NaN vectors when no vectors are near the centroid; exclude those centroids?
+                    double[] sums = new double[dimensions];
+                    for (int vecId : vectorIds) {
                         float[] vector = IOUtils.fetchFvecsEntry(fis, dimensions, vecId);
                         for (int a = 0; a < dimensions; a++) {
                             sums[a] += vector[a];
                         }
                     }
+                    for (int j = 0; j < sums.length; j++) {
+                        centroids[i].getVector()[j] = (float) (sums[j] / (float) vectorIds.size());
+                    }
+                    assert !Float.isNaN(centroids[i].getVector()[0]);
                 }
-                for(int j = 0; j < sums.length; j++) {
-                    centroids[i].getVector()[j] = (float) (sums[j] / (float) vectorIds.size());
-                }
-                assert !Float.isNaN(centroids[i].getVector()[0]);
             }
 
             // FIXME: FUTURE - replace w logging

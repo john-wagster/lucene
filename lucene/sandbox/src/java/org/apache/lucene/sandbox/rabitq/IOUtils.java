@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
+import java.nio.file.Path;
 
 public class IOUtils {
 
@@ -17,13 +18,16 @@ public class IOUtils {
         return new FvecsStream(stream, dimensions, cacheSize);
     }
 
-    public static int getTotalFvecs(FileInputStream stream, int dimensions) throws IOException {
-        FileChannel fc = stream.getChannel();
-        long fsize = fc.size();
-        return (int) ((fsize) / (dimensions * 4 + 4));
+    public static int getTotalFvecs(Path path, int dimensions) throws IOException {
+        try(FileInputStream fis = new FileInputStream(path.toFile())) {
+            FileChannel fc = fis.getChannel();
+            long fsize = fc.size();
+            return (int) ((fsize) / (dimensions * 4 + 4));
+        }
     }
 
     public static float[] fetchFvecsEntry(FileInputStream stream, int dimensions, int vectorIndex) throws IOException {
+        // FIXME: align along disk boundaries and read in chunks of bytes at a time and then decode then as requested (caching)
         FileChannel fc = stream.getChannel();  // FIXME: manage the channel outside of this function for performance??
         fc.position(vectorIndex * (4+4*dimensions));
 

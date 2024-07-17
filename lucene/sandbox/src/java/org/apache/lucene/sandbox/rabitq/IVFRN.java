@@ -42,9 +42,7 @@ public class IVFRN {
         D = dimensions;
         B = (D + 63) / 64 * 64;
 
-        try(FileInputStream fis = new FileInputStream(XPath.toFile())) {
-            N = IOUtils.getTotalFvecs(fis, dimensions);
-        }
+        N = IOUtils.getTotalFvecs(XPath, dimensions);
         C = centroids.length;
 
         // Check if B is greater than or equal to D
@@ -337,12 +335,12 @@ public class IVFRN {
             }
         }
 
-        int size = estimatorDistances.size();
-        for(int i = 0; i < size; i++) {
-            Result res = estimatorDistances.remove();
-            if (res.sqrY() < distK) {
-                // FIXME: reuse the same stream and channel to speed this up
-                try(FileInputStream fis = new FileInputStream(XPath.toFile())) {
+        try(FileInputStream fis = new FileInputStream(XPath.toFile())) {
+            int size = estimatorDistances.size();
+            for(int i = 0; i < size; i++) {
+                Result res = estimatorDistances.remove();
+                if (res.sqrY() < distK) {
+                    // FIXME: detect? and read regions of the file and reuse where it makes sense rather than just reading one vector at a time
                     float[] vector = IOUtils.fetchFvecsEntry(fis, D, dataMapping[res.c()]);
                     float gt_dist = VectorUtils.squareDistance(query, vector);
                     if (gt_dist < distK) {

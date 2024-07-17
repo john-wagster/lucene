@@ -66,9 +66,12 @@ public class Index {
         SamplingIVF index = new SamplingIVF(numCentroids);
         index.train(XPath, dimensions);
         Centroid[] centroids = index.getCentroids();
-        FvecsStream XStream = IOUtils.createFvecsStream(new FileInputStream(XPath.toFile()), dimensions); // X
-        SearchResult[] results = index.search(XStream);
-        XStream.close();
+
+        SearchResult[] results;
+        try(FvecsStream XStream = IOUtils.createFvecsStream(new FileInputStream(XPath.toFile()), dimensions)) { // X
+            results = index.search(XStream);
+        }
+
         float[] distToCentroids = new float[results.length];
         int[] clusterIds = new int[results.length];
         for (int i = 0; i < results.length; i++) {
@@ -84,33 +87,33 @@ public class Index {
     }
 
     private static SubspaceOutput generateSubSpaces(int D, int B, int MAX_BD, float[][] P, Path XPath, float[][] centroids, int[] clusterIds) throws IOException {
-        FvecsStream XStream = IOUtils.createFvecsStream(new FileInputStream(XPath.toFile()), D); // X
+        try(FvecsStream XStream = IOUtils.createFvecsStream(new FileInputStream(XPath.toFile()), D)) { // X
 
-        int XLength = XStream.getTotalFvecs();
+            int XLength = XStream.getTotalFvecs();
 
-        float[][] CP = MatrixUtils.padColumns(centroids, MAX_BD-D); // typically no-op if D/64
-        float[] x0 = new float[XLength];
-        long[][] repackedBinXP = new long[XLength][B >> 6];
+            float[][] CP = MatrixUtils.padColumns(centroids, MAX_BD - D); // typically no-op if D/64
+            float[] x0 = new float[XLength];
+            long[][] repackedBinXP = new long[XLength][B >> 6];
 
-        CP = MatrixUtils.dotProduct(CP, P);
+            CP = MatrixUtils.dotProduct(CP, P);
 
-        for(int i = 0; i < XLength; i++) {
-            float[] X = XStream.getNextFvec();
-            float[] XP = MatrixUtils.partialPadColumns(X, MAX_BD-D); // typically no-op if D/64
+            for (int i = 0; i < XLength; i++) {
+                float[] X = XStream.getNextFvec();
+                float[] XP = MatrixUtils.partialPadColumns(X, MAX_BD - D); // typically no-op if D/64
 
-            XP = MatrixUtils.partialDotProduct(XP, P);
-            XP = MatrixUtils.partialSubtract(XP, CP[clusterIds[i]]);
+                XP = MatrixUtils.partialDotProduct(XP, P);
+                XP = MatrixUtils.partialSubtract(XP, CP[clusterIds[i]]);
 
-            // The inner product between the data vector and the quantized data vector
-            float norm = MatrixUtils.partialNormForRow(XP);
-            float[] XPSubset = MatrixUtils.partialSubset(XP, B); // typically no-op if D/64
-            MatrixUtils.partialRemoveSignAndDivide(XPSubset, (float) Math.pow(B, 0.5));
-            x0[i] = MatrixUtils.partialSumAndNormalize(XPSubset, norm);
+                // The inner product between the data vector and the quantized data vector
+                float norm = MatrixUtils.partialNormForRow(XP);
+                float[] XPSubset = MatrixUtils.partialSubset(XP, B); // typically no-op if D/64
+                MatrixUtils.partialRemoveSignAndDivide(XPSubset, (float) Math.pow(B, 0.5));
+                x0[i] = MatrixUtils.partialSumAndNormalize(XPSubset, norm);
 
-            repackedBinXP[i] = MatrixUtils.partialRepackAsUInt64(XP, B);
+                repackedBinXP[i] = MatrixUtils.partialRepackAsUInt64(XP, B);
+            }
+            return new SubspaceOutput(P, CP, x0, repackedBinXP);
         }
-
-        return new SubspaceOutput(P, CP, x0, repackedBinXP);
     }
 
     private static float[][] getOrthogonalMatrix(int d) {

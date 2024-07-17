@@ -6,7 +6,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 
-public class FvecsStream {
+public class FvecsStream implements AutoCloseable {
     private final FileInputStream stream;
     private final FileChannel fc;
     private final int size;
