@@ -29,7 +29,7 @@ public class IOUtils {
     public static float[] fetchFvecsEntry(FileInputStream stream, int dimensions, int vectorIndex) throws IOException {
         // FIXME: align along disk boundaries and read in chunks of bytes at a time and then decode then as requested (caching)
         FileChannel fc = stream.getChannel();  // FIXME: manage the channel outside of this function for performance??
-        fc.position(vectorIndex * (4+4*dimensions));
+        fc.position(vectorIndex * (4L+4L*dimensions));
 
         ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
         fc.read(bb);
