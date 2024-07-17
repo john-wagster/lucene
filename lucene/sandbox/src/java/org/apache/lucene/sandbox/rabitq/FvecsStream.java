@@ -22,7 +22,7 @@ public class FvecsStream implements AutoCloseable {
         this.stream = stream;
         this.fc = this.stream.getChannel();
         long fsize = fc.size();
-        size = (int) ((fsize) / (dimensions * 4 + 4));
+        size = (int) ((fsize) / (dimensions * 4L + 4L));
         this.dimensions = dimensions;
 
         this.cacheSize = Math.min(cacheSize, this.size);;

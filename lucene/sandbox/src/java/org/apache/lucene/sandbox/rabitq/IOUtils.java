@@ -22,7 +22,7 @@ public class IOUtils {
         try(FileInputStream fis = new FileInputStream(path.toFile())) {
             FileChannel fc = fis.getChannel();
             long fsize = fc.size();
-            return (int) ((fsize) / (dimensions * 4 + 4));
+            return (int) ((fsize) / (dimensions * 4L + 4L));
         }
     }
 
