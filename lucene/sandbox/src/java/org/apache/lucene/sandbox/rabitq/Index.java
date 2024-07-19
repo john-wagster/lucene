@@ -75,9 +75,8 @@ public class Index {
 
         // cluster data vectors
         System.out.println("cluster data vectors");
-        SampleReader sampleReader = SampleReader.createSampleReader(vectors, COARSE_CLUSTERING_SAMPLE_SIZE, 42);
         SamplingIVF index = new SamplingIVF(numCentroids);
-        index.train(sampleReader, dimensions);
+        index.train(vectors, dimensions);
         Centroid[] centroids = index.getCentroids();
 
         SearchResult[] results = index.search(vectors);
