@@ -3,10 +3,10 @@ package org.apache.lucene.sandbox.rabitq;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.MMapDirectory;
+import org.apache.lucene.util.VectorUtil;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -40,21 +40,21 @@ public class Index {
         try (MMapDirectory directory = new MMapDirectory(basePath);
              IndexInput vectorInput = directory.openInput(source + "quora-522k-e5small_corpus-quora-E5-small.fvec", IOContext.DEFAULT)) {
             RandomAccessVectorValues.Floats vectorValues =
-              new VectorsReaderWithOffset(vectorInput, NUM_DOCS, dimensions, dimensions * Float.BYTES, Float.BYTES);
+              new VectorsReaderWithOffset(vectorInput, NUM_DOCS, dimensions);
             System.out.println("Clustering - e5small");
             long startTime = System.nanoTime();
             IVFOutput ivfOutput = clusterWithIVF(vectorValues, numCentroids, dimensions);
             long nanosToComputeIVF = System.nanoTime() - startTime;
             System.out.println("Time to compute IVF: " + TimeUnit.NANOSECONDS.toMillis(nanosToComputeIVF));
             System.out.println("Generating subspaces - e5small");
-            startTime = System.nanoTime();
             int MAX_BD = Math.max(D, B);
             P = getOrthogonalMatrix(MAX_BD);
             MatrixUtils.transpose(P);
-            SubspaceOutput subspaceOutput = generateSubSpaces(D, B, MAX_BD, P, vectorValues, ivfOutput.centroidVectors(), ivfOutput.clusterIds());
-            System.out.println("Time to compute sub-spaces: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime));
             Path projectionPath = Paths.get(new File(source, "P_C" + numCentroids + "_B" + B + ".fvecs").getAbsolutePath());
             IOUtils.toFvecs(new FileOutputStream(projectionPath.toFile()), P);
+            startTime = System.nanoTime();
+            SubspaceOutput subspaceOutput = generateSubSpaces(D, B, MAX_BD, P, vectorValues, ivfOutput.centroidVectors(), ivfOutput.clusterIds());
+            System.out.println("Time to compute sub-spaces: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime));
             float[][] centroids = subspaceOutput.cp();
             float[] x0 = subspaceOutput.x0();
             float[] distToCentroid = ivfOutput.distToCentroids();

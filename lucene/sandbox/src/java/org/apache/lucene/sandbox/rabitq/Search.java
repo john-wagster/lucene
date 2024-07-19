@@ -4,6 +4,7 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.store.ReadAdvice;
+import org.apache.lucene.util.VectorUtil;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 import java.io.File;
@@ -41,13 +42,13 @@ public class Search {
              IndexInput vectorInput =
                directory.openInput(dataPath, IOContext.DEFAULT.withReadAdvice(ReadAdvice.RANDOM));
              IndexInput queryInput = directory.openInput(queryPath, IOContext.READONCE)) {
-            RandomAccessVectorValues.Floats queryVectors = new VectorsReaderWithOffset(queryInput, 1000, dimensions, dimensions * Float.BYTES, Float.BYTES);
+            RandomAccessVectorValues.Floats queryVectors = new VectorsReaderWithOffset(queryInput, 1000, dimensions);
             float[][] Q = new float[queryVectors.size()][dimensions];
             for (int i = 0; i < queryVectors.size(); i++) {
                 Q[i] = Arrays.copyOf(queryVectors.vectorValue(i), dimensions);
             }
 
-            RandomAccessVectorValues.Floats dataVectors = new VectorsReaderWithOffset(vectorInput, Index.QUORA_E5_DOC_SIZE, dimensions, dimensions * Float.BYTES, Float.BYTES);
+            RandomAccessVectorValues.Floats dataVectors = new VectorsReaderWithOffset(vectorInput, Index.QUORA_E5_DOC_SIZE, dimensions);
             // we got to stop this, projecting should be measured as part of the query time. This is cheating slightly
             float[][] RandQ = MatrixUtils.dotProduct(Q, P);
 
