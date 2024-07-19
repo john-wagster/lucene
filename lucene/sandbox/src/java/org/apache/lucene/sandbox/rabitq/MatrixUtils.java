@@ -182,6 +182,9 @@ public class MatrixUtils {
     if (dimension == 0) {
       return a;
     }
+    if (a[0].length == dimension) {
+      return a;
+    }
     int pad = Math.max(a[0].length, dimension);
     float[][] aPad = new float[a.length][pad];
     for (int i = 0; i < a.length; i++) {
@@ -198,6 +201,9 @@ public class MatrixUtils {
 
   public static float[] partialPadColumns(float[] a, int dimension) {
     if (dimension == 0) {
+      return a;
+    }
+    if (a.length == dimension) {
       return a;
     }
     int pad = Math.max(a.length, dimension);

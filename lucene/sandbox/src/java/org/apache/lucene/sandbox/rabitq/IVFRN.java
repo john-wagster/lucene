@@ -292,7 +292,6 @@ public class IVFRN {
   public IVFRNResult search(
       RandomAccessVectorValues.Floats dataVectors,
       float[] query,
-      float[] rdQuery,
       int k,
       int nProbe,
       int B_QUERY)
@@ -306,7 +305,7 @@ public class IVFRN {
     // Find out the nearest N_{probe} centroids to the query vector.
     PriorityQueue<Result> topNProbeCentroids = new PriorityQueue<>(nProbe);
     for (int i = 0; i < C; i++) {
-      topNProbeCentroids.add(new Result(VectorUtils.squareDistance(rdQuery, centroids[i]), i));
+      topNProbeCentroids.add(new Result(VectorUtils.squareDistance(query, centroids[i]), i));
     }
 
     Result[] centroidDist = new Result[C];
@@ -332,11 +331,11 @@ public class IVFRN {
       }
 
       // Preprocess the residual query and the quantized query
-      float[] v = SpaceUtils.range(rdQuery, centroids[c]);
+      float[] v = SpaceUtils.range(query, centroids[c]);
       float vl = v[0], vr = v[1];
       float width = (vr - vl) / ((1 << B_QUERY) - 1);
 
-      QuantResult quantResult = SpaceUtils.quantize(rdQuery, centroids[c], u, vl, width);
+      QuantResult quantResult = SpaceUtils.quantize(query, centroids[c], u, vl, width);
       byte[] byteQuery = quantResult.result();
       int sumQ = quantResult.sumQ();
 

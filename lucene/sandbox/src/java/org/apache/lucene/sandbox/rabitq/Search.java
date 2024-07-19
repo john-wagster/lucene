@@ -4,7 +4,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.PriorityQueue;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
@@ -18,21 +17,18 @@ public class Search {
     // FIXME: better arg parsing
     // FIXME: clean up gross path mgmt
     // search DIRECTORY_TO_DATASET DATASET_NAME NUM_CENTROIDS DIMENSIONS B_QUERY OUTPUT_PATH
-    String source = args[0]; // eg "/Users/jwagster/Desktop/gist1m/gist/"
-    String dataset = args[1]; // eg "gist"
-    int numCentroids = Integer.parseInt(args[2]);
-    int dimensions = Integer.parseInt(args[3]);
-    int B_QUERY = Integer.parseInt(args[4]);
-    int k = Integer.parseInt(args[5]);
+    String source =  "/Users/benjamintrent/rabit_data/"; // eg "/Users/jwagster/Desktop/gist1m/gist/"
+    int numCentroids = 1;//Integer.parseInt(args[2]);
+    int dimensions = 384;//Integer.parseInt(args[3]);
+    int B_QUERY = 4;//Integer.parseInt(args[4]);
+    int k = 100;//Integer.parseInt(args[5]);
     int B = (dimensions + 63) / 64 * 64;
     Path basePath = Paths.get(source);
 
-    String queryPath = String.format("%s%s_query.fvecs", source, dataset);
-    String dataPath = String.format("%s%s_base.fvecs", source, dataset);
-    String groundTruthPath = String.format("%s%s_groundtruth.ivecs", source, dataset);
+    String queryPath = String.format("%s%s", source, "quora-522k-e5small_queries-quora-E5-small.fvec");
+    String dataPath = String.format("%s%s", source, "quora-522k-e5small_corpus-quora-E5-small.fvec");
+    String groundTruthPath = String.format("%s%s", source, "quora-522k-e5small_groundtruth-quora-E5-small.ivec");
     int[][] G = IOUtils.readIvecs(new FileInputStream(groundTruthPath));
-    String transformationPath = String.format("%sP_C%d_B%d.fvecs", source, numCentroids, B);
-    float[][] P = IOUtils.readFvecs(new FileInputStream(transformationPath));
     String indexPath = String.format("%sivfrabitq%d_B%d.index", source, numCentroids, B);
     IVFRN ivfrn = IVFRN.load(indexPath);
     try (MMapDirectory directory = new MMapDirectory(basePath);
@@ -41,24 +37,14 @@ public class Search {
         IndexInput queryInput = directory.openInput(queryPath, IOContext.READONCE)) {
       RandomAccessVectorValues.Floats queryVectors =
           new VectorsReaderWithOffset(queryInput, 1000, dimensions);
-      float[][] Q = new float[queryVectors.size()][dimensions];
-      for (int i = 0; i < queryVectors.size(); i++) {
-        Q[i] = Arrays.copyOf(queryVectors.vectorValue(i), dimensions);
-      }
-
       RandomAccessVectorValues.Floats dataVectors =
           new VectorsReaderWithOffset(vectorInput, Index.QUORA_E5_DOC_SIZE, dimensions);
-      // we got to stop this, projecting should be measured as part of the query time. This is
-      // cheating slightly
-      float[][] RandQ = MatrixUtils.dotProduct(Q, P);
-
-      test(queryVectors, RandQ, dataVectors, G, ivfrn, k, B_QUERY);
+      test(queryVectors, dataVectors, G, ivfrn, k, B_QUERY);
     }
   }
 
   public static void test(
       RandomAccessVectorValues.Floats queryVectors,
-      float[][] RandQ,
       RandomAccessVectorValues.Floats dataVectors,
       int[][] G,
       IVFRN ivf,
@@ -81,8 +67,7 @@ public class Search {
     for (int i = 0; i < queryVectors.size(); i++) {
       long startTime = System.nanoTime();
       float[] queryVector = queryVectors.vectorValue(i);
-      float[] randQ = RandQ[i];
-      IVFRNResult result = ivf.search(dataVectors, queryVector, randQ, k, nprobes, B_QUERY);
+      IVFRNResult result = ivf.search(dataVectors, queryVector, k, nprobes, B_QUERY);
       PriorityQueue<Result> KNNs = result.results();
       IVFRNStats stats = result.stats();
       float usertime =
