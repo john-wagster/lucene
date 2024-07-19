@@ -27,11 +27,12 @@ public class Index {
   static final int COARSE_CLUSTERING_KMEANS_RESTARTS = 5; // 5;
 
   public static void main(String[] args) throws Exception {
-    String source = "/Users/benjamintrent/rabit_data/"; //args[0];
-    int numCentroids = 1;// Integer.parseInt(args[2]);
-    int dimensions = 384;//Integer.parseInt(args[3]);
+    String source = args[0];
+    String dataset = args[1];
+    int numCentroids = Integer.parseInt(args[2]);
+    int dimensions = Integer.parseInt(args[3]);
     Path basePath = Paths.get(source);
-    Path fvecPath = Paths.get(basePath.toString(), "quora-522k-e5small_corpus-quora-E5-small.fvec");
+    Path fvecPath = Paths.get(basePath.toString(), dataset + "_base.fvecs");
     int D = dimensions;
     int B = (D + 63) / 64 * 64;
     try (MMapDirectory directory = new MMapDirectory(basePath);
