@@ -10,126 +10,127 @@ import java.nio.file.Path;
 
 public class IOUtils {
 
-    public static int getTotalFvecs(Path path, int dimensions) throws IOException {
-        try(FileInputStream fis = new FileInputStream(path.toFile())) {
-            FileChannel fc = fis.getChannel();
-            long fsize = fc.size();
-            return (int) ((fsize) / (dimensions * 4L + 4L));
-        }
+  public static int getTotalFvecs(Path path, int dimensions) throws IOException {
+    try (FileInputStream fis = new FileInputStream(path.toFile())) {
+      FileChannel fc = fis.getChannel();
+      long fsize = fc.size();
+      return (int) ((fsize) / (dimensions * 4L + 4L));
     }
+  }
 
-    public static float[] fetchFvecsEntry(FileInputStream stream, int dimensions, int vectorIndex) throws IOException {
-        // FIXME: align along disk boundaries and read in chunks of bytes at a time and then decode then as requested (caching)
-        FileChannel fc = stream.getChannel();  // FIXME: manage the channel outside of this function for performance??
-        fc.position(vectorIndex * (4L+4L*dimensions));
+  public static float[] fetchFvecsEntry(FileInputStream stream, int dimensions, int vectorIndex)
+      throws IOException {
+    // FIXME: align along disk boundaries and read in chunks of bytes at a time and then decode then
+    // as requested (caching)
+    FileChannel fc =
+        stream.getChannel(); // FIXME: manage the channel outside of this function for performance??
+    fc.position(vectorIndex * (4L + 4L * dimensions));
 
-        ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+    ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+    fc.read(bb);
+    bb.flip();
+
+    float[] data = new float[dimensions];
+    bb = ByteBuffer.allocate(dimensions * 4).order(ByteOrder.LITTLE_ENDIAN);
+    fc.read(bb);
+    bb.flip();
+    bb.asFloatBuffer().get(data);
+
+    return data;
+  }
+
+  public static float[][] readFvecs(FileInputStream stream) throws IOException {
+    FileChannel fc = stream.getChannel();
+
+    ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+    fc.read(bb);
+    bb.flip();
+    int dimensions = bb.getInt();
+
+    long fsize = fc.size();
+    int size = (int) ((fsize) / (dimensions * 4 + 4));
+    float[][] data = new float[size][dimensions];
+    for (int i = 0; i < size; i++) {
+      if (i != 0) {
+        bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
         fc.read(bb);
         bb.flip();
+        assert dimensions == bb.getInt(); // / dimensions every time
+      }
 
-        float[] data = new float[dimensions];
-        bb = ByteBuffer.allocate(dimensions*4).order(ByteOrder.LITTLE_ENDIAN);
+      bb = ByteBuffer.allocate(dimensions * 4).order(ByteOrder.LITTLE_ENDIAN);
+      fc.read(bb);
+      bb.flip();
+      bb.asFloatBuffer().get(data[i]);
+    }
+
+    return data;
+  }
+
+  public static int[][] readIvecs(FileInputStream stream) throws IOException {
+    FileChannel fc = stream.getChannel();
+    ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+    fc.read(bb);
+    bb.flip();
+    int dimensions = bb.getInt();
+
+    long fsize = fc.size();
+    int size = (int) ((fsize) / (dimensions * 4 + 4));
+    int[][] data = new int[size][dimensions];
+    for (int i = 0; i < size; i++) {
+      if (i != 0) {
+        bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
         fc.read(bb);
         bb.flip();
-        bb.asFloatBuffer().get(data);
+        assert dimensions == bb.getInt(); // / dimensions every time
+      }
 
-        return data;
+      bb = ByteBuffer.allocate(dimensions * 4).order(ByteOrder.LITTLE_ENDIAN);
+      fc.read(bb);
+      bb.flip();
+      bb.asIntBuffer().get(data[i]);
     }
 
-    public static float[][] readFvecs(FileInputStream stream) throws IOException {
-        FileChannel fc = stream.getChannel();
+    return data;
+  }
 
-        ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-        fc.read(bb);
-        bb.flip();
-        int dimensions = bb.getInt();
+  public static void toFvecs(FileOutputStream stream, float[][] data) throws IOException {
+    FileChannel fc = stream.getChannel();
+    int dimensions = data[0].length;
+    ByteBuffer bb;
 
-        long fsize = fc.size();
-        int size = (int) ((fsize) / (dimensions * 4 + 4));
-        float[][] data = new float[size][dimensions];
-        for (int i = 0; i < size; i++) {
-            if (i != 0) {
-                bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-                fc.read(bb);
-                bb.flip();
-                assert dimensions == bb.getInt();    /// dimensions every time
-            }
+    for (int i = 0; i < data.length; i++) {
+      bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+      bb.putInt(data[0].length);
+      bb.flip();
+      fc.write(bb);
 
-            bb = ByteBuffer.allocate(dimensions*4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
-            bb.asFloatBuffer().get(data[i]);
-        }
-
-        return data;
+      bb = ByteBuffer.allocate(dimensions * 4).order(ByteOrder.LITTLE_ENDIAN);
+      for (float d : data[i]) {
+        bb.putFloat(d);
+      }
+      bb.flip();
+      fc.write(bb);
     }
+  }
 
-    public static int[][] readIvecs(FileInputStream stream) throws IOException {
-        FileChannel fc = stream.getChannel();
-        ByteBuffer bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-        fc.read(bb);
-        bb.flip();
-        int dimensions = bb.getInt();
+  public static void toIvecs(FileOutputStream stream, int[][] data) throws IOException {
+    FileChannel fc = stream.getChannel();
+    int dimensions = data[0].length;
+    ByteBuffer bb;
 
-        long fsize = fc.size();
-        int size = (int) ((fsize) / (dimensions * 4 + 4));
-        int[][] data = new int[size][dimensions];
-        for (int i = 0; i < size; i++) {
-            if (i != 0) {
-                bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-                fc.read(bb);
-                bb.flip();
-                assert dimensions == bb.getInt();    /// dimensions every time
-            }
+    for (int i = 0; i < data.length; i++) {
+      bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+      bb.putInt(data[0].length);
+      bb.flip();
+      fc.write(bb);
 
-            bb = ByteBuffer.allocate(dimensions*4).order(ByteOrder.LITTLE_ENDIAN);
-            fc.read(bb);
-            bb.flip();
-            bb.asIntBuffer().get(data[i]);
-        }
-
-        return data;
+      bb = ByteBuffer.allocate(dimensions * 4).order(ByteOrder.LITTLE_ENDIAN);
+      for (int d : data[i]) {
+        bb.putInt(d);
+      }
+      bb.flip();
+      fc.write(bb);
     }
-
-    public static void toFvecs(FileOutputStream stream, float[][] data) throws IOException {
-        FileChannel fc = stream.getChannel();
-        int dimensions = data[0].length;
-        ByteBuffer bb;
-
-        for (int i = 0; i < data.length; i++) {
-            bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            bb.putInt(data[0].length);
-            bb.flip();
-            fc.write(bb);
-
-            bb = ByteBuffer.allocate(dimensions*4).order(ByteOrder.LITTLE_ENDIAN);
-            for(float d : data[i]) {
-                bb.putFloat(d);
-            }
-            bb.flip();
-            fc.write(bb);
-        }
-    }
-
-    public static void toIvecs(FileOutputStream stream, int[][] data) throws IOException {
-        FileChannel fc = stream.getChannel();
-        int dimensions = data[0].length;
-        ByteBuffer bb;
-
-        for (int i = 0; i < data.length; i++) {
-            bb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            bb.putInt(data[0].length);
-            bb.flip();
-            fc.write(bb);
-
-            bb = ByteBuffer.allocate(dimensions*4).order(ByteOrder.LITTLE_ENDIAN);
-            for(int d : data[i]) {
-                bb.putInt(d);
-            }
-            bb.flip();
-            fc.write(bb);
-        }
-    }
-
+  }
 }
-

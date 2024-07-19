@@ -1,10 +1,9 @@
 package org.apache.lucene.sandbox.rabitq;
 
+import java.io.IOException;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
-
-import java.io.IOException;
 
 public class VectorsReaderWithOffset implements RandomAccessVectorValues.Floats {
   private final IndexInput slice;
@@ -18,7 +17,8 @@ public class VectorsReaderWithOffset implements RandomAccessVectorValues.Floats 
     this.slice = slice;
     this.size = size;
     this.dim = dim;
-    // We assume that the start of ever vector entry includes an integer/float that indicates its dimension count
+    // We assume that the start of ever vector entry includes an integer/float that indicates its
+    // dimension count
     this.byteSize = Float.BYTES * dim + Float.BYTES;
     value = new float[dim];
   }
@@ -58,7 +58,8 @@ public class VectorsReaderWithOffset implements RandomAccessVectorValues.Floats 
     if (lastOrd == targetOrd) {
       return value;
     }
-    // Get to the appropriate vector for the ordinal, then skip the first 4 bytes storing its dimension count
+    // Get to the appropriate vector for the ordinal, then skip the first 4 bytes storing its
+    // dimension count
     long seekPos = (long) targetOrd * byteSize + Float.BYTES;
     slice.seek(seekPos);
     slice.readFloats(value, 0, value.length);
