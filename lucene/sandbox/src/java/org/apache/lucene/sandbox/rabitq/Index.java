@@ -7,6 +7,7 @@ import org.apache.lucene.util.VectorUtil;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -30,15 +31,17 @@ public class Index {
     static final int COARSE_CLUSTERING_KMEANS_RESTARTS = 5; // 5;
 
     public static void main(String[] args) throws Exception {
-        String source = "/Users/benjamintrent/rabit_data/"; //args[0];
-        int numCentroids = 1;// Integer.parseInt(args[2]);
-        int dimensions = 384;//Integer.parseInt(args[3]);
+        String source = args[0];
+        String dataset = args[1];
+        int numCentroids = Integer.parseInt(args[2]);
+        int dimensions = Integer.parseInt(args[3]);
         Path basePath = Paths.get(source);
+        Path fvecPath = Paths.get(basePath.toString(), dataset + "_base.fvecs");
         int D = dimensions;
         int B = (D + 63) / 64 * 64;
         float[][] P;
         try (MMapDirectory directory = new MMapDirectory(basePath);
-             IndexInput vectorInput = directory.openInput(source + "quora-522k-e5small_corpus-quora-E5-small.fvec", IOContext.DEFAULT)) {
+             IndexInput vectorInput = directory.openInput(fvecPath.toString(), IOContext.DEFAULT)) {
             RandomAccessVectorValues.Floats vectorValues =
               new VectorsReaderWithOffset(vectorInput, NUM_DOCS, dimensions);
             System.out.println("Clustering - e5small");

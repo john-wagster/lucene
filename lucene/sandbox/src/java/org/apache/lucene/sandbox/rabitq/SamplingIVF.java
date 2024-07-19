@@ -4,6 +4,7 @@ import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -43,7 +44,7 @@ public class SamplingIVF {
         IntStream.range(0, vectorsLength).boxed().collect(Collectors.toList()), totalClusters);
         for (int i = 0; i < totalClusters; i++) {
             int vectorIndex = randomStartVectors.get(i);
-            float[] vector = vectors.vectorValue(vectorIndex);
+            float[] vector = Arrays.copyOf(vectors.vectorValue(vectorIndex), vectors.dimension());
             this.centroids[i] = new Centroid(i, vector);
             HashSet<Integer> vecs = new HashSet<>();
             vecs.add(vectorIndex);

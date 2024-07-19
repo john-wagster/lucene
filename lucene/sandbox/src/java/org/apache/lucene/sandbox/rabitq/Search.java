@@ -22,17 +22,18 @@ public class Search {
         // FIXME: better arg parsing
         // FIXME: clean up gross path mgmt
         // search DIRECTORY_TO_DATASET DATASET_NAME NUM_CENTROIDS DIMENSIONS B_QUERY OUTPUT_PATH
-        String source = "/Users/benjamintrent/rabit_data/";  // eg "/Users/jwagster/Desktop/gist1m/gist/"
-        int numCentroids = 1;//Integer.parseInt(args[2]);
-        int dimensions = 384;//Integer.parseInt(args[3]);
-        int B_QUERY = 4;//Integer.parseInt(args[4]);
-        int k = 100;//Integer.parseInt(args[5]);
+        String source = args[0];  // eg "/Users/jwagster/Desktop/gist1m/gist/"
+        String dataset = args[1]; // eg "gist"
+        int numCentroids = Integer.parseInt(args[2]);
+        int dimensions = Integer.parseInt(args[3]);
+        int B_QUERY = Integer.parseInt(args[4]);
+        int k = Integer.parseInt(args[5]);
         int B = (dimensions + 63) / 64 * 64;
         Path basePath = Paths.get(source);
 
-        String queryPath = String.format("%s%s", source, "quora-522k-e5small_queries-quora-E5-small.fvec");
-        String dataPath = String.format("%s%s", source, "quora-522k-e5small_corpus-quora-E5-small.fvec");
-        String groundTruthPath = String.format("%s%s", source, "quora-522k-e5small_groundtruth-quora-E5-small.ivec");
+        String queryPath = String.format("%s%s_query.fvecs", source, dataset);
+        String dataPath = String.format("%s%s_base.fvecs", source, dataset);
+        String groundTruthPath = String.format("%s%s_groundtruth.ivecs", source, dataset);
         int[][] G = IOUtils.readIvecs(new FileInputStream(groundTruthPath));
         String transformationPath = String.format("%sP_C%d_B%d.fvecs", source, numCentroids, B);
         float[][] P = IOUtils.readFvecs(new FileInputStream(transformationPath));
