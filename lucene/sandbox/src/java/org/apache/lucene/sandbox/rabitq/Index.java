@@ -33,7 +33,6 @@ public class Index {
         String source = "/Users/benjamintrent/rabit_data/"; //args[0];
         int numCentroids = 1;// Integer.parseInt(args[2]);
         int dimensions = 384;//Integer.parseInt(args[3]);
-        int fileBytesize = dimensions * Float.BYTES;
         Path basePath = Paths.get(source);
         int D = dimensions;
         int B = (D + 63) / 64 * 64;
@@ -41,7 +40,7 @@ public class Index {
         try (MMapDirectory directory = new MMapDirectory(basePath);
              IndexInput vectorInput = directory.openInput(source + "quora-522k-e5small_corpus-quora-E5-small.fvec", IOContext.DEFAULT)) {
             RandomAccessVectorValues.Floats vectorValues =
-              new VectorsReaderWithOffset(vectorInput, NUM_DOCS, dimensions, fileBytesize, Float.BYTES);
+              new VectorsReaderWithOffset(vectorInput, NUM_DOCS, dimensions, dimensions * Float.BYTES, Float.BYTES);
             System.out.println("Clustering - e5small");
             long startTime = System.nanoTime();
             IVFOutput ivfOutput = clusterWithIVF(vectorValues, numCentroids, dimensions);

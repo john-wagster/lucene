@@ -19,7 +19,7 @@ public class VectorsReaderWithOffset implements RandomAccessVectorValues.Floats 
     this.slice = slice;
     this.size = size;
     this.dim = dim;
-    this.byteSize = byteSize;
+    this.byteSize = byteSize + offset;
     this.offset = offset;
     value = new float[dim];
   }
@@ -59,7 +59,7 @@ public class VectorsReaderWithOffset implements RandomAccessVectorValues.Floats 
     if (lastOrd == targetOrd) {
       return value;
     }
-    long seekPos = offset + (long) targetOrd * byteSize;
+    long seekPos = (long) targetOrd * byteSize;
     slice.seek(seekPos);
     slice.readFloats(value, 0, value.length);
     lastOrd = targetOrd;
