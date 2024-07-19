@@ -130,6 +130,21 @@ public class MatrixUtils {
         return result;
     }
 
+    public static float[] dotProduct(float[] q, float[][] projectionMatrix) {
+        int n = q.length;
+        int bN = projectionMatrix[0].length;
+        if (n != projectionMatrix.length) {
+            throw new IllegalArgumentException("Matrices are not compatible for dot product");
+        }
+        float[] result = new float[bN];
+        for (int j = 0; j < bN; j++) {
+            for (int k = 0; k < n; k++) {
+                result[j] = Math.fma(q[k], projectionMatrix[k][j], result[j]);
+            }
+        }
+        return result;
+    }
+
     public static float[][] dotProduct(float[][] a, float[][] b) {
         int m = a.length;
         int n = a[0].length;
@@ -173,13 +188,10 @@ public class MatrixUtils {
         return result;
     }
 
-    public static float[] partialSubtract(float[] a, float[] b) {
-        float[] result = new float[a.length];
+    public static void partialSubtract(float[] a, float[] b) {
         for(int j = 0; j < a.length; j++) {
-            result[j] = a[j] - b[j];
+            a[j] -= b[j];
         }
-
-        return result;
     }
 
     public static float[][] padColumns(float[][] a, int dimension) {

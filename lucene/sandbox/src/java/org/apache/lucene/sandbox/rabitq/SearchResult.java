@@ -19,14 +19,6 @@ public class SearchResult {
         return clusterId;
     }
 
-    public void setDistToCentroid(float distToCentroid) {
-        this.distToCentroid = distToCentroid;
-    }
-
-    public void setClusterId(int clusterId) {
-        this.clusterId = clusterId;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

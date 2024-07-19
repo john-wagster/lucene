@@ -10,14 +10,6 @@ import java.nio.file.Path;
 
 public class IOUtils {
 
-    public static FvecsStream createFvecsStream(FileInputStream stream, int dimensions) throws IOException {
-        return createFvecsStream(stream, dimensions, 10000);
-    }
-
-    public static FvecsStream createFvecsStream(FileInputStream stream, int dimensions, int cacheSize) throws IOException {
-        return new FvecsStream(stream, dimensions, cacheSize);
-    }
-
     public static int getTotalFvecs(Path path, int dimensions) throws IOException {
         try(FileInputStream fis = new FileInputStream(path.toFile())) {
             FileChannel fc = fis.getChannel();

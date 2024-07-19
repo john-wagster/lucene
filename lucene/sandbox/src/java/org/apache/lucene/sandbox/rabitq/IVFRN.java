@@ -1,5 +1,7 @@
 package org.apache.lucene.sandbox.rabitq;
 
+import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -36,13 +38,13 @@ public class IVFRN {
     private final int B;
     private final int D;
 
-    public IVFRN(Path XPath, float[][] centroids, float[] distToCentroid, float[] _x0, int[] clusterId, long[][] binary, int dimensions) throws IOException {
+    public IVFRN(int numVecs, float[][] centroids, float[] distToCentroid, float[] _x0, int[] clusterId, long[][] binary, int dimensions) throws IOException {
         // FIXME: clean up all the weird offset mgmt ... store mappings instead of repacking data everywhere
         // FIXME: stop serializing all of X here (in save) ... instead store a mapping
         D = dimensions;
         B = (D + 63) / 64 * 64;
 
-        N = IOUtils.getTotalFvecs(XPath, dimensions);
+        N = numVecs;
         C = centroids.length;
 
         // Check if B is greater than or equal to D
@@ -259,7 +261,7 @@ public class IVFRN {
         }
     }
 
-    public IVFRNResult search(Path XPath, float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) throws IOException {
+    public IVFRNResult search(RandomAccessVectorValues.Floats dataVectors, float[] query, float[] rdQuery, int k, int nProbe, int B_QUERY) throws IOException {
         //FIXME: FUTURE - implement fast scan and do a comparison
 
         assert nProbe < C;
@@ -335,22 +337,18 @@ public class IVFRN {
             }
         }
 
-        try(FileInputStream fis = new FileInputStream(XPath.toFile())) {
-            int size = estimatorDistances.size();
-            for(int i = 0; i < size; i++) {
-                Result res = estimatorDistances.remove();
-                if (res.sqrY() < distK) {
-                    // FIXME: detect? and read regions of the file and reuse where it makes sense rather than just reading one vector at a time
-                    float[] vector = IOUtils.fetchFvecsEntry(fis, D, dataMapping[res.c()]);
-                    float gt_dist = VectorUtils.squareDistance(query, vector);
-                    if (gt_dist < distK) {
-                        knns.add(new Result(gt_dist, id[res.c()]));
-                        if (knns.size() > k) {
-                            knns.remove();
-                        }
-                        if (knns.size() == k) {
-                            distK = knns.peek().sqrY();
-                        }
+        int size = estimatorDistances.size();
+        for(int i = 0; i < size; i++) {
+            Result res = estimatorDistances.remove();
+            if (res.sqrY() < distK) {
+                float gt_dist = VectorUtils.squareDistance(dataVectors.vectorValue(dataMapping[res.c()]), query);
+                if (gt_dist < distK) {
+                    knns.add(new Result(gt_dist, id[res.c()]));
+                    if (knns.size() > k) {
+                        knns.remove();
+                    }
+                    if (knns.size() == k) {
+                        distK = knns.peek().sqrY();
                     }
                 }
             }
