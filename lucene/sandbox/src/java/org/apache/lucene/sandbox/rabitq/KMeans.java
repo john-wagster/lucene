@@ -28,7 +28,7 @@ public class KMeans {
   }
 
   public float[][] computeCentroids(
-    int restarts, int iters, Consumer<float[][]> centersTransformFunc) throws IOException {
+      int restarts, int iters, Consumer<float[][]> centersTransformFunc) throws IOException {
     short[] docCentroids = new short[numDocs];
     double minSquaredDist = Double.MAX_VALUE;
     double squaredDist = 0;
@@ -36,11 +36,11 @@ public class KMeans {
 
     for (int restart = 0; restart < restarts; restart++) {
       float[][] centroids =
-        switch (initializationMethod) {
-          case 1 -> initializeCentroidsSimple();
-          case 2 -> initializeCentroidsPlusPlus();
-          default -> initializeForgy();
-        };
+          switch (initializationMethod) {
+            case 1 -> initializeCentroidsSimple();
+            case 2 -> initializeCentroidsPlusPlus();
+            default -> initializeForgy();
+          };
 
       for (int iter = 0; iter < iters; iter++) {
         squaredDist = runKMeansStep(vectors, centroids, docCentroids, false, centersTransformFunc);
@@ -126,12 +126,12 @@ public class KMeans {
   }
 
   public static double runKMeansStep(
-    RandomAccessVectorValues.Floats vectors,
-    float[][] centroids,
-    short[] docCentroids,
-    boolean useKahanSummation,
-    Consumer<float[][]> centersTransformFunc)
-    throws IOException {
+      RandomAccessVectorValues.Floats vectors,
+      float[][] centroids,
+      short[] docCentroids,
+      boolean useKahanSummation,
+      Consumer<float[][]> centersTransformFunc)
+      throws IOException {
     short numCentroids = (short) centroids.length;
 
     float[][] newCentroids = new float[numCentroids][centroids[0].length];
