@@ -35,7 +35,6 @@ public class Index {
     Path fvecPath = Paths.get(basePath.toString(), dataset + "_base.fvecs");
     int D = dimensions;
     int B = (D + 63) / 64 * 64;
-    float[][] P;
     try (MMapDirectory directory = new MMapDirectory(basePath);
         IndexInput vectorInput = directory.openInput(fvecPath.toString(), IOContext.DEFAULT)) {
       RandomAccessVectorValues.Floats vectorValues =
@@ -48,15 +47,10 @@ public class Index {
           "Time to compute IVF: " + TimeUnit.NANOSECONDS.toMillis(nanosToComputeIVF));
       System.out.println("Generating subspaces - e5small");
       int MAX_BD = Math.max(D, B);
-      P = getOrthogonalMatrix(MAX_BD);
-      MatrixUtils.transpose(P);
-      Path projectionPath =
-          Paths.get(new File(source, "P_C" + numCentroids + "_B" + B + ".fvecs").getAbsolutePath());
-      IOUtils.toFvecs(new FileOutputStream(projectionPath.toFile()), P);
       startTime = System.nanoTime();
       SubspaceOutput subspaceOutput =
           generateSubSpaces(
-              D, B, MAX_BD, P, vectorValues, ivfOutput.centroidVectors(), ivfOutput.clusterIds());
+              D, B, MAX_BD, vectorValues, ivfOutput.centroidVectors(), ivfOutput.clusterIds());
       System.out.println(
           "Time to compute sub-spaces: "
               + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime));
@@ -103,7 +97,6 @@ public class Index {
       int D,
       int B,
       int MAX_BD,
-      float[][] P,
       RandomAccessVectorValues.Floats vectorValues,
       float[][] centroids,
       int[] clusterIds)
@@ -116,12 +109,10 @@ public class Index {
     float[] x0 = new float[XLength];
     long[][] repackedBinXP = new long[XLength][B >> 6];
 
-    CP = MatrixUtils.dotProduct(CP, P);
     for (int i = 0; i < vectorValues.size(); i++) {
       float[] X = vectorValues.vectorValue(i);
       float[] XP = MatrixUtils.partialPadColumns(X, MAX_BD - D); // typically no-op if D/64
 
-      XP = MatrixUtils.partialDotProduct(XP, P);
       MatrixUtils.partialSubtract(XP, CP[clusterIds[i]]);
 
       // The inner product between the data vector and the quantized data vector
@@ -131,18 +122,7 @@ public class Index {
       x0[i] = MatrixUtils.partialSumAndNormalize(XPSubset, norm);
       repackedBinXP[i] = MatrixUtils.partialRepackAsUInt64(XP, B);
     }
-    return new SubspaceOutput(P, CP, x0, repackedBinXP);
+    return new SubspaceOutput(CP, x0, repackedBinXP);
   }
 
-  private static float[][] getOrthogonalMatrix(int d) {
-    Random random = new Random(1);
-    float[][] G = new float[d][d];
-    for (int i = 0; i < d; i++) {
-      for (int j = 0; j < d; j++) {
-        G[i][j] = (float) random.nextGaussian();
-      }
-    }
-    QRDecomposition qr = new QRDecomposition(G);
-    return qr.getQT();
-  }
 }

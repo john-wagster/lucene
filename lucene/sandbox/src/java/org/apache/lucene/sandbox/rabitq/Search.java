@@ -4,7 +4,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.PriorityQueue;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
@@ -31,8 +30,6 @@ public class Search {
     String dataPath = String.format("%s%s_base.fvecs", source, dataset);
     String groundTruthPath = String.format("%s%s_groundtruth.ivecs", source, dataset);
     int[][] G = IOUtils.readIvecs(new FileInputStream(groundTruthPath));
-    String transformationPath = String.format("%sP_C%d_B%d.fvecs", source, numCentroids, B);
-    float[][] P = IOUtils.readFvecs(new FileInputStream(transformationPath));
     String indexPath = String.format("%sivfrabitq%d_B%d.index", source, numCentroids, B);
     IVFRN ivfrn = IVFRN.load(indexPath);
     try (MMapDirectory directory = new MMapDirectory(basePath);
@@ -41,24 +38,14 @@ public class Search {
         IndexInput queryInput = directory.openInput(queryPath, IOContext.READONCE)) {
       RandomAccessVectorValues.Floats queryVectors =
           new VectorsReaderWithOffset(queryInput, 1000, dimensions);
-      float[][] Q = new float[queryVectors.size()][dimensions];
-      for (int i = 0; i < queryVectors.size(); i++) {
-        Q[i] = Arrays.copyOf(queryVectors.vectorValue(i), dimensions);
-      }
-
       RandomAccessVectorValues.Floats dataVectors =
           new VectorsReaderWithOffset(vectorInput, Index.QUORA_E5_DOC_SIZE, dimensions);
-      // we got to stop this, projecting should be measured as part of the query time. This is
-      // cheating slightly
-      float[][] RandQ = MatrixUtils.dotProduct(Q, P);
-
-      test(queryVectors, RandQ, dataVectors, G, ivfrn, k, B_QUERY);
+      test(queryVectors, dataVectors, G, ivfrn, k, B_QUERY);
     }
   }
 
   public static void test(
       RandomAccessVectorValues.Floats queryVectors,
-      float[][] RandQ,
       RandomAccessVectorValues.Floats dataVectors,
       int[][] G,
       IVFRN ivf,
@@ -81,8 +68,7 @@ public class Search {
     for (int i = 0; i < queryVectors.size(); i++) {
       long startTime = System.nanoTime();
       float[] queryVector = queryVectors.vectorValue(i);
-      float[] randQ = RandQ[i];
-      IVFRNResult result = ivf.search(dataVectors, queryVector, randQ, k, nprobes, B_QUERY);
+      IVFRNResult result = ivf.search(dataVectors, queryVector, k, nprobes, B_QUERY);
       PriorityQueue<Result> KNNs = result.results();
       IVFRNStats stats = result.stats();
       float usertime =
