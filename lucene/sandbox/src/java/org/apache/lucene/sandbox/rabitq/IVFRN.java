@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 import java.util.Random;
@@ -289,12 +290,63 @@ public class IVFRN {
     }
   }
 
+  record QuantizedQuery(
+      long[] result, int sumQ, float centroidDist, float vl, float width, int centroidId) {}
+
+  public int getCentroidId(int vectorNodeId) {
+    int centroidPos = Arrays.binarySearch(start, vectorNodeId);
+    if (centroidPos == 0) {
+      return 0;
+    }
+    assert centroidPos < 0;
+    // Flip the sign and subtract 2 to get the centroid id
+    return -centroidPos - 2;
+  }
+
+  public QuantizedQuery[] quantizeQuery(float[] query, int B_QUERY) {
+    QuantizedQuery[] quantizedQueries = new QuantizedQuery[C];
+    for (int c = 0; c < C; c++) {
+      float sqrY = VectorUtils.squareDistance(query, centroids[c]);
+
+      // Preprocess the residual query and the quantized query
+      float[] v = SpaceUtils.range(query, centroids[c]);
+      float vl = v[0], vr = v[1];
+      float width = (vr - vl) / ((1 << B_QUERY) - 1);
+
+      QuantResult quantResult = SpaceUtils.quantize(query, centroids[c], u, vl, width);
+      byte[] byteQuery = quantResult.result();
+      int sumQ = quantResult.sumQ();
+
+      long[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
+      quantizedQueries[c] = new QuantizedQuery(quantQuery, sumQ, sqrY, vl, width, c);
+    }
+    return quantizedQueries;
+  }
+
+  public float quantizeCompare(QuantizedQuery quantizedQuery, int nodeId, int B_QUERY) {
+    int c = quantizedQuery.centroidId();
+    float sqrY = quantizedQuery.centroidDist();
+    float vl = quantizedQuery.vl();
+    float width = quantizedQuery.width();
+    long[] quantQuery = quantizedQuery.result();
+    int sumQ = quantizedQuery.sumQ();
+
+    int startC = start[c];
+    assert nodeId >= startC && nodeId < startC + len[c];
+
+    float tmpDist = 0;
+    long qcDist = SpaceUtils.ipByteBin(quantQuery, binaryCode[nodeId], B_QUERY, B);
+
+    tmpDist +=
+        fac[nodeId].sqrX()
+            + sqrY
+            + fac[nodeId].factorPPC() * vl
+            + (qcDist * 2 - sumQ) * fac[nodeId].factorIP() * width;
+    return tmpDist;
+  }
+
   public IVFRNResult search(
-      RandomAccessVectorValues.Floats dataVectors,
-      float[] query,
-      int k,
-      int nProbe,
-      int B_QUERY)
+      RandomAccessVectorValues.Floats dataVectors, float[] query, int k, int nProbe, int B_QUERY)
       throws IOException {
     // FIXME: FUTURE - implement fast scan and do a comparison
 
@@ -322,6 +374,7 @@ public class IVFRN {
     float errorBoundAvg = 0f;
     int errorBoundTotalCalcs = 0;
     int totalEstimatorQueueAdds = 0;
+    int floatingPointOps = 0;
     for (int pb = 0; pb < nProbe; pb++) {
       int c = centroidDist[pb].c();
       float sqrY = centroidDist[pb].sqrY();
@@ -379,6 +432,7 @@ public class IVFRN {
     for (int i = 0; i < size; i++) {
       Result res = estimatorDistances.remove();
       if (res.sqrY() < distK) {
+        floatingPointOps++;
         float gt_dist =
             VectorUtils.squareDistance(dataVectors.vectorValue(dataMapping[res.c()]), query);
         if (gt_dist < distK) {
@@ -395,7 +449,10 @@ public class IVFRN {
 
     IVFRNStats stats =
         new IVFRNStats(
-            maxEstimatorSize, totalEstimatorQueueAdds, errorBoundAvg / errorBoundTotalCalcs);
+            maxEstimatorSize,
+            totalEstimatorQueueAdds,
+            floatingPointOps,
+            errorBoundAvg / errorBoundTotalCalcs);
     return new IVFRNResult(knns, stats);
   }
 

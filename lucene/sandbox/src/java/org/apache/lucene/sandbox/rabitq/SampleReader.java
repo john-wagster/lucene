@@ -14,7 +14,7 @@ public class SampleReader implements RandomAccessVectorValues.Floats {
   private final IntUnaryOperator sampleFunction;
 
   SampleReader(
-    RandomAccessVectorValues.Floats origin, int sampleSize, IntUnaryOperator sampleFunction) {
+      RandomAccessVectorValues.Floats origin, int sampleSize, IntUnaryOperator sampleFunction) {
     this.origin = origin;
     this.sampleSize = sampleSize;
     this.sampleFunction = sampleFunction;
@@ -61,7 +61,7 @@ public class SampleReader implements RandomAccessVectorValues.Floats {
   }
 
   public static SampleReader createSampleReader(
-    RandomAccessVectorValues.Floats origin, int k, long seed) {
+      RandomAccessVectorValues.Floats origin, int k, long seed) {
     int[] samples = reservoirSample(origin.size(), k, seed);
     return new SampleReader(origin, samples.length, i -> samples[i]);
   }

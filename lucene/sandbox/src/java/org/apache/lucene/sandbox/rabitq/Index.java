@@ -1,12 +1,9 @@
 package org.apache.lucene.sandbox.rabitq;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
@@ -124,5 +121,4 @@ public class Index {
     }
     return new SubspaceOutput(CP, x0, repackedBinXP);
   }
-
 }
