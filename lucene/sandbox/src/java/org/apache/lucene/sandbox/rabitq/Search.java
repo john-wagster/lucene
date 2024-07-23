@@ -36,7 +36,7 @@ public class Search {
     String dataset = args[1]; // eg "gist"
     int numCentroids = Integer.parseInt(args[2]);
     int dimensions = Integer.parseInt(args[3]);
-    int B_QUERY = Integer.parseInt(args[4]);
+    int B_QUERY = 4;
     int k = Integer.parseInt(args[5]);
     int totalQueryVectors = Integer.parseInt(args[6]);
     boolean doHnsw = false;

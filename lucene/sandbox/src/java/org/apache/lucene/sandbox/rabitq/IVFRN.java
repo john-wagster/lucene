@@ -319,13 +319,13 @@ public class IVFRN {
       byte[] byteQuery = quantResult.result();
       int sumQ = quantResult.sumQ();
 
-      byte[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
+      byte[] quantQuery = SpaceUtils.transposeBin(byteQuery, D);
       quantizedQueries[c] = new QuantizedQuery(quantQuery, sumQ, sqrY, vl, width, c);
     }
     return quantizedQueries;
   }
 
-  public float quantizeCompare(QuantizedQuery quantizedQuery, int nodeId, int B_QUERY, Map<Byte, Integer> bitCountMap) {
+  public float quantizeCompare(QuantizedQuery quantizedQuery, int nodeId, int B_QUERY) {
     int c = quantizedQuery.centroidId();
     float sqrY = quantizedQuery.centroidDist();
     float vl = quantizedQuery.vl();
@@ -337,7 +337,7 @@ public class IVFRN {
     assert nodeId >= startC && nodeId < startC + len[c];
 
     float tmpDist = 0;
-    long qcDist = SpaceUtils.ipByteBinBytePan(quantQuery, binaryCode[nodeId], B_QUERY, B, bitCountMap);
+    long qcDist = SpaceUtils.ipByteBinBytePan(quantQuery, binaryCode[nodeId]);
 
     tmpDist +=
         fac[nodeId].sqrX()
@@ -351,13 +351,6 @@ public class IVFRN {
       RandomAccessVectorValues.Floats dataVectors, float[] query, int k, int nProbe, int B_QUERY)
       throws IOException {
     // FIXME: FUTURE - implement fast scan and do a comparison
-
-    Map<Byte, Integer> bitCountMap = new HashMap<>();
-
-    for (int i = 0; i < 256; i++) { // Loop through all possible byte values (0 to 255)
-      int bitsSet = SpaceUtils.countBits((byte) i); // Count the number of bits set in the current byte
-      bitCountMap.put((byte)i, bitsSet); // Store the mapping in the HashMap
-    }
 
     assert nProbe < C;
     float distK = Float.MAX_VALUE;
@@ -402,7 +395,7 @@ public class IVFRN {
       int sumQ = quantResult.sumQ();
 
       // Binary String Representation
-      byte[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
+      byte[] quantQuery = SpaceUtils.transposeBin(byteQuery, D);
 
       int startC = start[c];
       float y = (float) Math.sqrt(sqrY);
@@ -411,8 +404,7 @@ public class IVFRN {
       int bCounter = startC;
 
       for (int i = 0; i < len[c]; i++) {
-        long qcDist = SpaceUtils.ipByteBinBytePan(quantQuery, binaryCode[bCounter], B_QUERY, B, bitCountMap);
-//        long qcDist = SpaceUtils.ipByteBinByte(quantQuery, binaryCode[bCounter], B_QUERY, B, bitCountMap);
+        long qcDist = SpaceUtils.ipByteBinByte(quantQuery, binaryCode[bCounter], B);
 
         float tmpDist =
             fac[facCounter].sqrX()

@@ -97,10 +97,9 @@ public class Index {
     int XLength = vectorValues.size();
 
     float[][] CP = MatrixUtils.padColumns(centroids, MAX_BD - D); // typically no-op if D/64
-    // TODO This is  bad, loading all vectors into memory is untenable. We will need to transform
-    // this.
+
     float[] x0 = new float[XLength];
-    byte[][] repackedBinXP = new byte[XLength][B / 8];  // FIXME: WAGS
+    byte[][] repackedBinXP = new byte[XLength][B / 8];
 
     for (int i = 0; i < vectorValues.size(); i++) {
       float[] X = vectorValues.vectorValue(i);
