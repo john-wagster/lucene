@@ -36,17 +36,16 @@ public class Search {
     String dataset = args[1]; // eg "gist"
     int numCentroids = Integer.parseInt(args[2]);
     int dimensions = Integer.parseInt(args[3]);
-    int B_QUERY = 4;
-    int k = Integer.parseInt(args[5]);
-    int totalQueryVectors = Integer.parseInt(args[6]);
+    int k = Integer.parseInt(args[4]);
+    int totalQueryVectors = Integer.parseInt(args[5]);
     boolean doHnsw = false;
     int maxConns = 16;
     int beamWidth = 100;
     if (args.length > 7) {
-      doHnsw = Boolean.parseBoolean(args[7]);
+      doHnsw = Boolean.parseBoolean(args[6]);
       if (args.length > 8) {
-        maxConns = Integer.parseInt(args[8]);
-        beamWidth = Integer.parseInt(args[9]);
+        maxConns = Integer.parseInt(args[7]);
+        beamWidth = Integer.parseInt(args[8]);
       }
     }
     InfoStream infoStream = new PrintStreamInfoStream(System.out);
