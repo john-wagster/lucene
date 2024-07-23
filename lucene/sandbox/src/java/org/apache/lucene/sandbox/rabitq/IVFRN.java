@@ -402,7 +402,7 @@ public class IVFRN {
       int bCounter = startC;
 
       for (int i = 0; i < len[c]; i++) {
-        long qcDist = SpaceUtils.ipByteBinByte(quantQuery, binaryCode[bCounter], B);
+        long qcDist = SpaceUtils.ipByteBinBytePan(quantQuery, binaryCode[bCounter], B);
 
         float tmpDist =
             fac[facCounter].sqrX()
