@@ -69,7 +69,7 @@ public class Search {
         System.out.println(
             "Building HNSW graph with maxConns=" + maxConns + " beamWidth=" + beamWidth);
         RBQRandomVectorScorerSupplier scorerSupplier =
-            new RBQRandomVectorScorerSupplier(dataVectors, ivfrn, B_QUERY);
+            new RBQRandomVectorScorerSupplier(dataVectors, ivfrn);
         HnswGraphBuilder hnsw =
             HnswGraphBuilder.create(scorerSupplier, maxConns, beamWidth, 42, dataVectors.size());
         hnsw.setInfoStream(infoStream);
@@ -78,9 +78,9 @@ public class Search {
         graphBuildTime = System.nanoTime() - graphBuildTime;
         System.out.println(
             "Graph build time: " + TimeUnit.NANOSECONDS.toMillis(graphBuildTime) + " ms");
-        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, 300, B_QUERY);
+        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, 300);
       } else {
-        test(queryVectors, dataVectors, G, ivfrn, k, B_QUERY);
+        test(queryVectors, dataVectors, G, ivfrn, k);
       }
     }
   }
@@ -92,8 +92,7 @@ public class Search {
       IVFRN ivf,
       OnHeapHnswGraph hnsw,
       int k,
-      int numCandidates,
-      int B_QUERY)
+      int numCandidates)
       throws IOException {
 
     float totalUsertime = 0;
@@ -108,10 +107,9 @@ public class Search {
       RandomVectorScorer scorer =
           new RBQRandomVectorScorerSupplier.RBQRandomVectorScorer(
               queryVector,
-              ivf.quantizeQuery(queryVectors.vectorValue(i), B_QUERY),
+              ivf.quantizeQuery(queryVectors.vectorValue(i)),
               dataVectors,
-              ivf,
-              B_QUERY);
+              ivf);
       KnnCollector knnCollector =
           HnswGraphSearcher.search(scorer, numCandidates, hnsw, null, hnsw.size());
       totalVectorComparisons += knnCollector.visitedCount();
@@ -173,8 +171,7 @@ public class Search {
       RandomAccessVectorValues.Floats dataVectors,
       int[][] G,
       IVFRN ivf,
-      int k,
-      int B_QUERY)
+      int k)
       throws IOException {
 
     int nprobes = 300;
@@ -193,7 +190,7 @@ public class Search {
     for (int i = 0; i < queryVectors.size(); i++) {
       long startTime = System.nanoTime();
       float[] queryVector = queryVectors.vectorValue(i);
-      IVFRNResult result = ivf.search(dataVectors, queryVector, k, nprobes, B_QUERY);
+      IVFRNResult result = ivf.search(dataVectors, queryVector, k, nprobes);
       PriorityQueue<Result> KNNs = result.results();
       IVFRNStats stats = result.stats();
       float usertime =

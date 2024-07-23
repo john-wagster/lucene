@@ -1,5 +1,7 @@
 package org.apache.lucene.sandbox.rabitq;
 
+import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
+
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -8,11 +10,8 @@ import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Random;
-import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 public class IVFRN {
   private Factor[] fac;
@@ -305,7 +304,7 @@ public class IVFRN {
     return -centroidPos - 2;
   }
 
-  public QuantizedQuery[] quantizeQuery(float[] query, int B_QUERY) {
+  public QuantizedQuery[] quantizeQuery(float[] query) {
     QuantizedQuery[] quantizedQueries = new QuantizedQuery[C];
     for (int c = 0; c < C; c++) {
       float sqrY = VectorUtils.squareDistance(query, centroids[c]);
@@ -313,7 +312,7 @@ public class IVFRN {
       // Preprocess the residual query and the quantized query
       float[] v = SpaceUtils.range(query, centroids[c]);
       float vl = v[0], vr = v[1];
-      float width = (vr - vl) / ((1 << B_QUERY) - 1);
+      float width = (vr - vl) / ((1 << SpaceUtils.B_QUERY) - 1);
 
       QuantResult quantResult = SpaceUtils.quantize(query, centroids[c], u, vl, width);
       byte[] byteQuery = quantResult.result();
@@ -325,7 +324,7 @@ public class IVFRN {
     return quantizedQueries;
   }
 
-  public float quantizeCompare(QuantizedQuery quantizedQuery, int nodeId, int B_QUERY) {
+  public float quantizeCompare(QuantizedQuery quantizedQuery, int nodeId) {
     int c = quantizedQuery.centroidId();
     float sqrY = quantizedQuery.centroidDist();
     float vl = quantizedQuery.vl();
@@ -348,7 +347,7 @@ public class IVFRN {
   }
 
   public IVFRNResult search(
-      RandomAccessVectorValues.Floats dataVectors, float[] query, int k, int nProbe, int B_QUERY)
+      RandomAccessVectorValues.Floats dataVectors, float[] query, int k, int nProbe)
       throws IOException {
     // FIXME: FUTURE - implement fast scan and do a comparison
 
@@ -388,7 +387,7 @@ public class IVFRN {
       // Preprocess the residual query and the quantized query
       float[] v = SpaceUtils.range(query, centroids[c]);
       float vl = v[0], vr = v[1];
-      float width = (vr - vl) / ((1 << B_QUERY) - 1);
+      float width = (vr - vl) / ((1 << SpaceUtils.B_QUERY) - 1);
 
       QuantResult quantResult = SpaceUtils.quantize(query, centroids[c], u, vl, width);
       byte[] byteQuery = quantResult.result();
