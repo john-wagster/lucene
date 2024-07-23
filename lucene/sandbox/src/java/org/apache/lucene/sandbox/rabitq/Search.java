@@ -25,6 +25,9 @@ import org.apache.lucene.util.hnsw.RandomVectorScorer;
 
 public class Search {
 
+//  public static final int TOTAL_QUERY_VECTORS_QUORA = 1000;
+//  public static final int TOTAL_QUERY_VECTORS_SIFTSMALL = 100;
+
   public static void main(String[] args) throws Exception {
     // FIXME: better arg parsing
     // FIXME: clean up gross path mgmt
@@ -35,14 +38,15 @@ public class Search {
     int dimensions = Integer.parseInt(args[3]);
     int B_QUERY = Integer.parseInt(args[4]);
     int k = Integer.parseInt(args[5]);
+    int totalQueryVectors = Integer.parseInt(args[6]);
     boolean doHnsw = false;
     int maxConns = 16;
     int beamWidth = 100;
-    if (args.length > 6) {
-      doHnsw = Boolean.parseBoolean(args[6]);
-      if (args.length > 7) {
-        maxConns = Integer.parseInt(args[7]);
-        beamWidth = Integer.parseInt(args[8]);
+    if (args.length > 7) {
+      doHnsw = Boolean.parseBoolean(args[7]);
+      if (args.length > 8) {
+        maxConns = Integer.parseInt(args[8]);
+        beamWidth = Integer.parseInt(args[9]);
       }
     }
     InfoStream infoStream = new PrintStreamInfoStream(System.out);
@@ -59,9 +63,9 @@ public class Search {
         IndexInput vectorInput = directory.openInput(dataPath, IOContext.DEFAULT);
         IndexInput queryInput = directory.openInput(queryPath, IOContext.READONCE)) {
       RandomAccessVectorValues.Floats queryVectors =
-          new VectorsReaderWithOffset(queryInput, 1000, dimensions);
+          new VectorsReaderWithOffset(queryInput, totalQueryVectors, dimensions);
       RandomAccessVectorValues.Floats dataVectors =
-          new VectorsReaderWithOffset(vectorInput, Index.QUORA_E5_DOC_SIZE, dimensions);
+          new VectorsReaderWithOffset(vectorInput, ivfrn.getN(), dimensions);
       if (doHnsw) {
         System.out.println(
             "Building HNSW graph with maxConns=" + maxConns + " beamWidth=" + beamWidth);
@@ -212,7 +216,7 @@ public class Search {
       }
       correctCount += correct;
 
-      if (i % 1500 == 0) {
+      if (i % 15 == 0) {
         System.out.print(".");
       }
 

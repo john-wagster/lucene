@@ -8,6 +8,8 @@ import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Random;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
@@ -25,7 +27,7 @@ public class IVFRN {
   private float[] u; // B of floats random numbers sampled from the uniform distribution [0,1]
 
   // FIXME: FUTURE - make this a byte[] instead??
-  private long[][] binaryCode; // (B / 64) * N of 64-bit uint64_t
+  private byte[][] binaryCode; // (B / 8) * N of 64-bit uint64_t
 
   private float[] x0; // N of floats in the Random Net algorithm
   private float[][]
@@ -41,7 +43,7 @@ public class IVFRN {
       float[] distToCentroid,
       float[] _x0,
       int[] clusterId,
-      long[][] binary,
+      byte[][] binary,
       int dimensions)
       throws IOException {
     // FIXME: clean up all the weird offset mgmt ... store mappings instead of repacking data
@@ -85,7 +87,7 @@ public class IVFRN {
     this.centroids = centroids;
 
     this.dataMapping = new int[N];
-    this.binaryCode = new long[N][B / 64];
+    this.binaryCode = new byte[N][B / 8];
     for (int i = 0; i < N; i++) {
       int x = id[i];
       dataMapping[i] = x;
@@ -100,7 +102,7 @@ public class IVFRN {
       int b,
       float[][] centroids,
       int[] dataMapping,
-      long[][] binaryCode,
+      byte[][] binaryCode,
       int[] start,
       int[] len,
       int[] id,
@@ -179,8 +181,8 @@ public class IVFRN {
 
       for (int i = 0; i < N; i++) {
         bb = ByteBuffer.allocate(8 * B / 64).order(ByteOrder.LITTLE_ENDIAN);
-        for (int j = 0; j < B / 64; j++) {
-          bb.putLong(binaryCode[i][j]);
+        for (int j = 0; j < B / 8; j++) {
+          bb.put(binaryCode[i][j]);
         }
         bb.flip();
         fc.write(bb);
@@ -205,7 +207,7 @@ public class IVFRN {
       float[][] centroids = new float[C][B];
       int[] dataMapping = new int[N];
 
-      long[][] binaryCode = new long[N][B / 64];
+      byte[][] binaryCode = new byte[N][B / 8];
       int[] start = new int[C];
       int[] len = new int[C];
       int[] id = new int[N];
@@ -258,8 +260,8 @@ public class IVFRN {
         bb = ByteBuffer.allocate(8 * B / 64).order(ByteOrder.LITTLE_ENDIAN);
         fc.read(bb);
         bb.flip();
-        for (int j = 0; j < B / 64; j++) {
-          binaryCode[i][j] = bb.getLong();
+        for (int j = 0; j < B / 8; j++) {
+          binaryCode[i][j] = bb.get();
         }
       }
 
@@ -291,7 +293,7 @@ public class IVFRN {
   }
 
   record QuantizedQuery(
-      long[] result, int sumQ, float centroidDist, float vl, float width, int centroidId) {}
+      byte[] result, int sumQ, float centroidDist, float vl, float width, int centroidId) {}
 
   public int getCentroidId(int vectorNodeId) {
     int centroidPos = Arrays.binarySearch(start, vectorNodeId);
@@ -317,25 +319,25 @@ public class IVFRN {
       byte[] byteQuery = quantResult.result();
       int sumQ = quantResult.sumQ();
 
-      long[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
+      byte[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
       quantizedQueries[c] = new QuantizedQuery(quantQuery, sumQ, sqrY, vl, width, c);
     }
     return quantizedQueries;
   }
 
-  public float quantizeCompare(QuantizedQuery quantizedQuery, int nodeId, int B_QUERY) {
+  public float quantizeCompare(QuantizedQuery quantizedQuery, int nodeId, int B_QUERY, Map<Byte, Integer> bitCountMap) {
     int c = quantizedQuery.centroidId();
     float sqrY = quantizedQuery.centroidDist();
     float vl = quantizedQuery.vl();
     float width = quantizedQuery.width();
-    long[] quantQuery = quantizedQuery.result();
+    byte[] quantQuery = quantizedQuery.result();
     int sumQ = quantizedQuery.sumQ();
 
     int startC = start[c];
     assert nodeId >= startC && nodeId < startC + len[c];
 
     float tmpDist = 0;
-    long qcDist = SpaceUtils.ipByteBin(quantQuery, binaryCode[nodeId], B_QUERY, B);
+    long qcDist = SpaceUtils.ipByteBinBytePan(quantQuery, binaryCode[nodeId], B_QUERY, B, bitCountMap);
 
     tmpDist +=
         fac[nodeId].sqrX()
@@ -349,6 +351,13 @@ public class IVFRN {
       RandomAccessVectorValues.Floats dataVectors, float[] query, int k, int nProbe, int B_QUERY)
       throws IOException {
     // FIXME: FUTURE - implement fast scan and do a comparison
+
+    Map<Byte, Integer> bitCountMap = new HashMap<>();
+
+    for (int i = 0; i < 256; i++) { // Loop through all possible byte values (0 to 255)
+      int bitsSet = SpaceUtils.countBits((byte) i); // Count the number of bits set in the current byte
+      bitCountMap.put((byte)i, bitsSet); // Store the mapping in the HashMap
+    }
 
     assert nProbe < C;
     float distK = Float.MAX_VALUE;
@@ -393,7 +402,7 @@ public class IVFRN {
       int sumQ = quantResult.sumQ();
 
       // Binary String Representation
-      long[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
+      byte[] quantQuery = SpaceUtils.transposeBin(byteQuery, D, B_QUERY);
 
       int startC = start[c];
       float y = (float) Math.sqrt(sqrY);
@@ -402,7 +411,8 @@ public class IVFRN {
       int bCounter = startC;
 
       for (int i = 0; i < len[c]; i++) {
-        long qcDist = SpaceUtils.ipByteBin(quantQuery, binaryCode[bCounter], B_QUERY, B);
+        long qcDist = SpaceUtils.ipByteBinBytePan(quantQuery, binaryCode[bCounter], B_QUERY, B, bitCountMap);
+//        long qcDist = SpaceUtils.ipByteBinByte(quantQuery, binaryCode[bCounter], B_QUERY, B, bitCountMap);
 
         float tmpDist =
             fac[facCounter].sqrX()
@@ -458,5 +468,9 @@ public class IVFRN {
 
   public int getC() {
     return this.C;
+  }
+
+  public int getN() {
+    return this.N;
   }
 }

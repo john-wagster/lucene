@@ -9,7 +9,6 @@ public class MatrixUtils {
   // FIXME: check errors
 
   private static final VectorSpecies<Float> FLOAT_SPECIES = FloatVector.SPECIES_PREFERRED;
-  ;
 
   public static void removeSignAndDivide(float[][] a, float divisor) {
     for (int i = 0; i < a.length; i++) {
@@ -307,24 +306,21 @@ public class MatrixUtils {
     return allBinary;
   }
 
-  public static long[] partialRepackAsUInt64(float[] XP, int B) {
-    int totalValues = B >> 6;
+  public static byte[] partialRepackAsUInt64(float[] XP, int B) {
+    int totalValues = B / 8;
 
-    long[] allBinary = new long[totalValues];
+    byte[] allBinary = new byte[totalValues];
 
-    for (int h = 0; h < XP.length; h += 64) {
-      long result = 0L;
+    for (int h = 0; h < XP.length; h += 8) {
+      byte result = 0;
       int q = 0;
       for (int i = 7; i >= 0; i--) {
-        for (int j = 7; j >= 0; j--) {
-          if (XP[h + i * 8 + j] > 0) {
-            result |= (1L << q);
-          }
-          q++;
+        if (XP[h + i] > 0) {
+          result |= (byte) (1 << q);
         }
+        q++;
       }
-
-      allBinary[h / 64] = result;
+      allBinary[h / 8] = result;
     }
 
     return allBinary;
