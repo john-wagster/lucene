@@ -17,9 +17,9 @@ public class SpaceUtils {
     return BitSet.valueOf(d).cardinality();
   }
 
-  public static long ipByteBinByte(byte[] q, byte[] d, int B) {
+  public static long ipByteBinByte(byte[] q, byte[] d) {
     long ret = 0;
-    int size = B / 8;
+    int size = d.length;
     for (int i = 0; i < B_QUERY; i++) {
       int r = 0;
       long subRet = 0;
@@ -40,6 +40,7 @@ public class SpaceUtils {
   public static long ipByteBinBytePan(byte[] q, byte[] d) {
     int vectorSize = d.length / BYTE_SPECIES.length();
     long ret = 0;
+    int size = d.length;
     for (int i = 0; i < B_QUERY; i++) {
       long subRet = 0;
       for (int r = 0; r < vectorSize; r++) {
@@ -50,8 +51,20 @@ public class SpaceUtils {
         vres = vres.lanewise(VectorOperators.BIT_COUNT);
         subRet += vres.reduceLanes(VectorOperators.ADD); // subRet += byteMap.get(estimatedDist)
       }
+
+      // FIXME: come back and pad the arrays with zeros instead of dealing with the tail?
+      // tail
+      int remainder = d.length % BYTE_SPECIES.length();
+      if(remainder != 0) {
+        for(int j = d.length-remainder; j < d.length; j += Integer.BYTES) {
+          subRet += Integer.bitCount((int) BitUtil.VH_NATIVE_INT.get(q, i * size + j) & (int) BitUtil.VH_NATIVE_INT.get(d, j));
+        }
+      }
+
       ret += subRet << i;
     }
+
+
     return ret;
   }
 
