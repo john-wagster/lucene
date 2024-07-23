@@ -1,7 +1,5 @@
 package org.apache.lucene.sandbox.rabitq;
 
-import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
-
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -12,6 +10,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 import java.util.Random;
+import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 public class IVFRN {
   private Factor[] fac;

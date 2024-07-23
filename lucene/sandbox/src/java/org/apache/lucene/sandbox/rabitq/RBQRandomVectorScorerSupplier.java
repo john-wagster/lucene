@@ -1,9 +1,6 @@
 package org.apache.lucene.sandbox.rabitq;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 import org.apache.lucene.util.hnsw.RandomVectorScorer;
 import org.apache.lucene.util.hnsw.RandomVectorScorerSupplier;

@@ -14,8 +14,8 @@ public class Index {
   // FIXME: introduce logging instead of println
   // FIXME: stream in X so it can be loaded into memory
   // FIXME: better arg parsing
-//  static final int QUORA_E5_DOC_SIZE = 522_931;
-//  static final int SIFTSMALL_DOCS_SIZE = 10_000;
+  //  static final int QUORA_E5_DOC_SIZE = 522_931;
+  //  static final int SIFTSMALL_DOCS_SIZE = 10_000;
 
   public static void main(String[] args) throws Exception {
     String source = args[0];

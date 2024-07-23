@@ -25,8 +25,8 @@ import org.apache.lucene.util.hnsw.RandomVectorScorer;
 
 public class Search {
 
-//  public static final int TOTAL_QUERY_VECTORS_QUORA = 1000;
-//  public static final int TOTAL_QUERY_VECTORS_SIFTSMALL = 100;
+  //  public static final int TOTAL_QUERY_VECTORS_QUORA = 1000;
+  //  public static final int TOTAL_QUERY_VECTORS_SIFTSMALL = 100;
 
   public static void main(String[] args) throws Exception {
     // FIXME: better arg parsing
@@ -106,10 +106,7 @@ public class Search {
       float[] queryVector = queryVectors.vectorValue(i);
       RandomVectorScorer scorer =
           new RBQRandomVectorScorerSupplier.RBQRandomVectorScorer(
-              queryVector,
-              ivf.quantizeQuery(queryVectors.vectorValue(i)),
-              dataVectors,
-              ivf);
+              queryVector, ivf.quantizeQuery(queryVectors.vectorValue(i)), dataVectors, ivf);
       KnnCollector knnCollector =
           HnswGraphSearcher.search(scorer, numCandidates, hnsw, null, hnsw.size());
       totalVectorComparisons += knnCollector.visitedCount();

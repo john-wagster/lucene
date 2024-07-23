@@ -1,12 +1,11 @@
 package org.apache.lucene.sandbox.rabitq;
 
+import java.nio.ByteBuffer;
+import java.util.BitSet;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
 import org.apache.lucene.util.BitUtil;
-
-import java.nio.ByteBuffer;
-import java.util.BitSet;
 
 public class SpaceUtils {
 
@@ -25,7 +24,10 @@ public class SpaceUtils {
       int r = 0;
       long subRet = 0;
       for (final int upperBound = d.length & -Integer.BYTES; r < upperBound; r += Integer.BYTES) {
-        subRet += Integer.bitCount((int) BitUtil.VH_NATIVE_INT.get(q, i * size + r) & (int) BitUtil.VH_NATIVE_INT.get(d, r));
+        subRet +=
+            Integer.bitCount(
+                (int) BitUtil.VH_NATIVE_INT.get(q, i * size + r)
+                    & (int) BitUtil.VH_NATIVE_INT.get(d, r));
       }
       for (; r < d.length; r++) {
         subRet += Integer.bitCount((q[i * size + r] & d[i]) & 0xFF);
@@ -116,7 +118,7 @@ public class SpaceUtils {
     }
 
     ByteBuffer bb = ByteBuffer.allocate((B / 8) * B_QUERY);
-    for(int j = 0; j < quantQuery.length; j++) {
+    for (int j = 0; j < quantQuery.length; j++) {
       bb.putLong(quantQuery[j]);
     }
     bb.flip();
