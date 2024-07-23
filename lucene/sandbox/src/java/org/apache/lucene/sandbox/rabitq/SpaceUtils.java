@@ -1,43 +1,62 @@
 package org.apache.lucene.sandbox.rabitq;
 
 import java.nio.ByteBuffer;
+import java.util.BitSet;
+import jdk.incubator.vector.ByteVector;
+import jdk.incubator.vector.VectorOperators;
+import jdk.incubator.vector.VectorSpecies;
+import org.apache.lucene.util.BitUtil;
 
 public class SpaceUtils {
 
-  public static int popcount(long[] d, int B) {
-    int ret = 0;
-    for (int i = 0; i < B / 64; i++) {
-      // FIXME: implement this in C because Long.bitCount is not optimized
-      // FIXME: Integer.bitCount used like this is still slower than Long.bitCount
-      // FIXME: a more comprehensive refactor to remove longs and replace with ints is non-trivial
-      ret += Long.bitCount(d[i]);
-      //            ret += Integer.bitCount((int)(d[i] & 0x00000000ffffffffL));
-      //            ret += Integer.bitCount((int)((d[i] & 0xffffffff00000000L) >>> 32));
-    }
-    return ret;
+  private static final VectorSpecies<Byte> BYTE_SPECIES = ByteVector.SPECIES_PREFERRED;
+
+  public static final int B_QUERY = 4;
+
+  public static int popcount(byte[] d, int B) {
+    return BitSet.valueOf(d).cardinality();
   }
 
-  public static long ipByteBin(long[] q, long[] d, int B_QUERY, int B) {
+  public static long ipByteBinByte(byte[] q, byte[] d, int B) {
     long ret = 0;
-    int size = B / 64;
+    int size = B / 8;
     for (int i = 0; i < B_QUERY; i++) {
+      int r = 0;
       long subRet = 0;
-      for (int j = 0; j < size; j++) {
-        // FIXME: implement this in C because Long.bitCount is not optimized
-        // FIXME: Integer.bitCount used like this is still slower than Long.bitCount
-        // FIXME: a more comprehensive refactor to remove longs and replace with ints is non-trivial
-        long estimatedDist = q[i * size + j] & d[j];
-        subRet += Long.bitCount(estimatedDist);
-        //                subRet += Integer.bitCount((int)(estimatedDist & 0x00000000ffffffffL));
-        //                subRet += Integer.bitCount((int)((estimatedDist & 0xffffffff00000000L) >>>
-        // 32));
+      for (final int upperBound = d.length & -Integer.BYTES; r < upperBound; r += Integer.BYTES) {
+        subRet +=
+            Integer.bitCount(
+                (int) BitUtil.VH_NATIVE_INT.get(q, i * size + r)
+                    & (int) BitUtil.VH_NATIVE_INT.get(d, r));
+      }
+      for (; r < d.length; r++) {
+        subRet += Integer.bitCount((q[i * size + r] & d[i]) & 0xFF);
       }
       ret += subRet << i;
     }
     return ret;
   }
 
-  public static long[] transposeBin(byte[] q, int D, int B_QUERY) {
+  public static long ipByteBinBytePan(byte[] q, byte[] d) {
+    int vectorSize = d.length / BYTE_SPECIES.length();
+    long ret = 0;
+    for (int i = 0; i < B_QUERY; i++) {
+      long subRet = 0;
+      for (int r = 0; r < vectorSize; r++) {
+        int offset = BYTE_SPECIES.length() * r;
+        ByteVector vq = ByteVector.fromArray(BYTE_SPECIES, q, d.length * i + offset);
+        ByteVector vd = ByteVector.fromArray(BYTE_SPECIES, d, offset);
+        ByteVector vres = vq.and(vd);
+        vres = vres.lanewise(VectorOperators.BIT_COUNT);
+        subRet += vres.reduceLanes(VectorOperators.ADD); // subRet += byteMap.get(estimatedDist)
+      }
+      ret += subRet << i;
+    }
+    return ret;
+  }
+
+  public static byte[] transposeBin(byte[] q, int D) {
+    // FIXME: rewrite this function to no longer use longs
     // FIXME: FUTURE - verify B_QUERY > 0
     // FIXME: rewrite with panama?
     assert B_QUERY > 0;
@@ -98,7 +117,12 @@ public class SpaceUtils {
       qOffset += 32;
     }
 
-    return quantQuery;
+    ByteBuffer bb = ByteBuffer.allocate((B / 8) * B_QUERY);
+    for (int j = 0; j < quantQuery.length; j++) {
+      bb.putLong(quantQuery[j]);
+    }
+    bb.flip();
+    return bb.array();
   }
 
   private static long moveMaskEpi8(byte[] v) {

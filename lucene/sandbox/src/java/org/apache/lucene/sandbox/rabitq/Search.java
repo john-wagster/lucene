@@ -25,6 +25,9 @@ import org.apache.lucene.util.hnsw.RandomVectorScorer;
 
 public class Search {
 
+  //  public static final int TOTAL_QUERY_VECTORS_QUORA = 1000;
+  //  public static final int TOTAL_QUERY_VECTORS_SIFTSMALL = 100;
+
   public static void main(String[] args) throws Exception {
     // FIXME: better arg parsing
     // FIXME: clean up gross path mgmt
@@ -33,14 +36,14 @@ public class Search {
     String dataset = args[1]; // eg "gist"
     int numCentroids = Integer.parseInt(args[2]);
     int dimensions = Integer.parseInt(args[3]);
-    int B_QUERY = Integer.parseInt(args[4]);
-    int k = Integer.parseInt(args[5]);
+    int k = Integer.parseInt(args[4]);
+    int totalQueryVectors = Integer.parseInt(args[5]);
     boolean doHnsw = false;
     int maxConns = 16;
     int beamWidth = 100;
-    if (args.length > 6) {
+    if (args.length > 7) {
       doHnsw = Boolean.parseBoolean(args[6]);
-      if (args.length > 7) {
+      if (args.length > 8) {
         maxConns = Integer.parseInt(args[7]);
         beamWidth = Integer.parseInt(args[8]);
       }
@@ -59,14 +62,14 @@ public class Search {
         IndexInput vectorInput = directory.openInput(dataPath, IOContext.DEFAULT);
         IndexInput queryInput = directory.openInput(queryPath, IOContext.READONCE)) {
       RandomAccessVectorValues.Floats queryVectors =
-          new VectorsReaderWithOffset(queryInput, 1000, dimensions);
+          new VectorsReaderWithOffset(queryInput, totalQueryVectors, dimensions);
       RandomAccessVectorValues.Floats dataVectors =
-          new VectorsReaderWithOffset(vectorInput, Index.QUORA_E5_DOC_SIZE, dimensions);
+          new VectorsReaderWithOffset(vectorInput, ivfrn.getN(), dimensions);
       if (doHnsw) {
         System.out.println(
             "Building HNSW graph with maxConns=" + maxConns + " beamWidth=" + beamWidth);
         RBQRandomVectorScorerSupplier scorerSupplier =
-            new RBQRandomVectorScorerSupplier(dataVectors, ivfrn, B_QUERY);
+            new RBQRandomVectorScorerSupplier(dataVectors, ivfrn);
         HnswGraphBuilder hnsw =
             HnswGraphBuilder.create(scorerSupplier, maxConns, beamWidth, 42, dataVectors.size());
         hnsw.setInfoStream(infoStream);
@@ -75,9 +78,9 @@ public class Search {
         graphBuildTime = System.nanoTime() - graphBuildTime;
         System.out.println(
             "Graph build time: " + TimeUnit.NANOSECONDS.toMillis(graphBuildTime) + " ms");
-        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, 300, B_QUERY);
+        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, 300);
       } else {
-        test(queryVectors, dataVectors, G, ivfrn, k, B_QUERY);
+        test(queryVectors, dataVectors, G, ivfrn, k);
       }
     }
   }
@@ -89,8 +92,7 @@ public class Search {
       IVFRN ivf,
       OnHeapHnswGraph hnsw,
       int k,
-      int numCandidates,
-      int B_QUERY)
+      int numCandidates)
       throws IOException {
 
     float totalUsertime = 0;
@@ -104,11 +106,7 @@ public class Search {
       float[] queryVector = queryVectors.vectorValue(i);
       RandomVectorScorer scorer =
           new RBQRandomVectorScorerSupplier.RBQRandomVectorScorer(
-              queryVector,
-              ivf.quantizeQuery(queryVectors.vectorValue(i), B_QUERY),
-              dataVectors,
-              ivf,
-              B_QUERY);
+              queryVector, ivf.quantizeQuery(queryVectors.vectorValue(i)), dataVectors, ivf);
       KnnCollector knnCollector =
           HnswGraphSearcher.search(scorer, numCandidates, hnsw, null, hnsw.size());
       totalVectorComparisons += knnCollector.visitedCount();
@@ -170,8 +168,7 @@ public class Search {
       RandomAccessVectorValues.Floats dataVectors,
       int[][] G,
       IVFRN ivf,
-      int k,
-      int B_QUERY)
+      int k)
       throws IOException {
 
     int nprobes = 300;
@@ -190,7 +187,7 @@ public class Search {
     for (int i = 0; i < queryVectors.size(); i++) {
       long startTime = System.nanoTime();
       float[] queryVector = queryVectors.vectorValue(i);
-      IVFRNResult result = ivf.search(dataVectors, queryVector, k, nprobes, B_QUERY);
+      IVFRNResult result = ivf.search(dataVectors, queryVector, k, nprobes);
       PriorityQueue<Result> KNNs = result.results();
       IVFRNStats stats = result.stats();
       float usertime =
@@ -212,7 +209,7 @@ public class Search {
       }
       correctCount += correct;
 
-      if (i % 1500 == 0) {
+      if (i % 15 == 0) {
         System.out.print(".");
       }
 

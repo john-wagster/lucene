@@ -14,20 +14,16 @@ public class Index {
   // FIXME: introduce logging instead of println
   // FIXME: stream in X so it can be loaded into memory
   // FIXME: better arg parsing
-  static final int QUORA_E5_DOC_SIZE = 522_931;
-  static final int NUM_DOCS = QUORA_E5_DOC_SIZE;
-  // The number of docs to sample to compute the coarse clustering.
-  static final int COARSE_CLUSTERING_SAMPLE_SIZE = (int) (QUORA_E5_DOC_SIZE * 0.1);
-  // The number of iterations to run k-means for when computing the coarse clustering.
-  static final int COARSE_CLUSTERING_KMEANS_ITR = 10; // 10;
-  // The number of random restarts of clustering to use when computing the coarse clustering.
-  static final int COARSE_CLUSTERING_KMEANS_RESTARTS = 5; // 5;
+  //  static final int QUORA_E5_DOC_SIZE = 522_931;
+  //  static final int SIFTSMALL_DOCS_SIZE = 10_000;
 
   public static void main(String[] args) throws Exception {
     String source = args[0];
     String dataset = args[1];
     int numCentroids = Integer.parseInt(args[2]);
     int dimensions = Integer.parseInt(args[3]);
+    int totalTrainingDocs = Integer.parseInt(args[4]);
+    int numDocs = totalTrainingDocs;
     Path basePath = Paths.get(source);
     Path fvecPath = Paths.get(basePath.toString(), dataset + "_base.fvecs");
     int D = dimensions;
@@ -35,14 +31,14 @@ public class Index {
     try (MMapDirectory directory = new MMapDirectory(basePath);
         IndexInput vectorInput = directory.openInput(fvecPath.toString(), IOContext.DEFAULT)) {
       RandomAccessVectorValues.Floats vectorValues =
-          new VectorsReaderWithOffset(vectorInput, NUM_DOCS, dimensions);
-      System.out.println("Clustering - e5small");
+          new VectorsReaderWithOffset(vectorInput, numDocs, dimensions);
+      System.out.println("Clustering - " + dataset);
       long startTime = System.nanoTime();
       IVFOutput ivfOutput = clusterWithIVF(vectorValues, numCentroids, dimensions);
       long nanosToComputeIVF = System.nanoTime() - startTime;
       System.out.println(
           "Time to compute IVF: " + TimeUnit.NANOSECONDS.toMillis(nanosToComputeIVF));
-      System.out.println("Generating subspaces - e5small");
+      System.out.println("Generating subspaces - " + dataset);
       int MAX_BD = Math.max(D, B);
       startTime = System.nanoTime();
       SubspaceOutput subspaceOutput =
@@ -55,10 +51,10 @@ public class Index {
       float[] x0 = subspaceOutput.x0();
       float[] distToCentroid = ivfOutput.distToCentroids();
       int[] clusterId = ivfOutput.clusterIds();
-      long[][] binary = subspaceOutput.repackedBinXP();
+      byte[][] binary = subspaceOutput.repackedBinXP();
 
       System.out.println("Loading Complete!");
-      IVFRN ivf = new IVFRN(NUM_DOCS, centroids, distToCentroid, x0, clusterId, binary, dimensions);
+      IVFRN ivf = new IVFRN(numDocs, centroids, distToCentroid, x0, clusterId, binary, dimensions);
 
       System.out.println("Saving");
       String indexPath = source + "ivfrabitq" + numCentroids + "_B" + B + ".index";
@@ -101,10 +97,9 @@ public class Index {
     int XLength = vectorValues.size();
 
     float[][] CP = MatrixUtils.padColumns(centroids, MAX_BD - D); // typically no-op if D/64
-    // TODO This is  bad, loading all vectors into memory is untenable. We will need to transform
-    // this.
+
     float[] x0 = new float[XLength];
-    long[][] repackedBinXP = new long[XLength][B >> 6];
+    byte[][] repackedBinXP = new byte[XLength][B / 8];
 
     for (int i = 0; i < vectorValues.size(); i++) {
       float[] X = vectorValues.vectorValue(i);
