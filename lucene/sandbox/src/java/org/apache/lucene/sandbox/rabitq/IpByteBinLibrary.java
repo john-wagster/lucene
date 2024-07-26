@@ -12,31 +12,35 @@ import java.nio.file.Paths;
 
 class IpByteBinLibrary {
 
+    static {
+        // FIXME: load dynamically by copying from the packaged jar or adding to the `-Djava.library.path`
+        // System.loadLibrary("ipbytebin");
+        System.load(Paths.get("lucene/sandbox/src/resources/libipbytebin.dylib").toFile().getAbsolutePath());
+    }
+
+    static final Linker linker = Linker.nativeLinker();
+
+    //uint32_t ip_byte_bin(uint64_t *q, uint64_t *d, uint32_t B);
+    static final String name = "ip_byte_bin";
+    static final FunctionDescriptor fdesc = FunctionDescriptor.of(
+            ValueLayout.JAVA_INT,
+            ValueLayout.ADDRESS.withTargetLayout(MemoryLayout.sequenceLayout(ValueLayout.JAVA_LONG)),
+            ValueLayout.ADDRESS.withTargetLayout(MemoryLayout.sequenceLayout(ValueLayout.JAVA_LONG)),
+            ValueLayout.JAVA_INT
+    );
+
+    static final SymbolLookup libIpByteBin = SymbolLookup.loaderLookup();
+
+    static final MethodHandle ipByteBin = linker.downcallHandle(
+            libIpByteBin.find(name).orElseThrow(),
+            fdesc);
+
     public static long ipByteBinNative(long[] q, long[] d, int B) {
         // FIXME: better handle errors
+        // FIXME: because we have to copy this offheap my guess is the only way to make this efficient will be to manage everything off heap ... need to rewrite search function
         try (Arena offHeap = Arena.ofConfined()) {
-            // FIXME: load dynamically by copying from the packaged jar or adding to the `-Djava.library.path`
-            // System.loadLibrary("ipbytebin");
-            System.load(Paths.get("lucene/sandbox/src/resources/libipbytebin.dylib").toFile().getAbsolutePath());
-
-            Linker linker = Linker.nativeLinker();
-
             MemorySegment qP = offHeap.allocateArray(ValueLayout.JAVA_LONG, q);
             MemorySegment dP = offHeap.allocateArray(ValueLayout.JAVA_LONG, d);
-
-            //uint32_t ip_byte_bin(uint64_t *q, uint64_t *d, uint32_t B);
-            String name = "ip_byte_bin";
-            FunctionDescriptor fdesc = FunctionDescriptor.of(
-                    ValueLayout.JAVA_INT,
-                    ValueLayout.ADDRESS.withTargetLayout(MemoryLayout.sequenceLayout(ValueLayout.JAVA_LONG)),
-                    ValueLayout.ADDRESS.withTargetLayout(MemoryLayout.sequenceLayout(ValueLayout.JAVA_LONG)),
-                    ValueLayout.JAVA_INT
-            );
-
-            SymbolLookup libIpByteBin = SymbolLookup.loaderLookup();
-            MethodHandle ipByteBin = linker.downcallHandle(
-                    libIpByteBin.find(name).orElseThrow(),
-                    fdesc);
 
             try {
                 return (int) ipByteBin.invokeExact(qP, dP, B);
