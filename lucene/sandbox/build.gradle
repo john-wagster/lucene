@@ -24,3 +24,8 @@ dependencies {
   moduleApi project(':lucene:queries')
   moduleTestImplementation project(':lucene:test-framework')
 }
+
+compileJava {
+  options.compilerArgs.addAll(['--release', '21'])
+  options.compilerArgs.addAll(['--enable-preview'])
+}

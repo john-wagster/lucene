@@ -3,6 +3,9 @@ package org.apache.lucene.sandbox.rabitq;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -25,7 +28,7 @@ public class IVFRN {
   private float[] u; // B of floats random numbers sampled from the uniform distribution [0,1]
 
   // FIXME: FUTURE - make this a byte[] instead??
-  private long[][] binaryCode; // (B / 64) * N of 64-bit uint64_t
+  public long[][] binaryCode; // (B / 64) * N of 64-bit uint64_t
 
   private float[] x0; // N of floats in the Random Net algorithm
   private float[][]
@@ -346,7 +349,7 @@ public class IVFRN {
   }
 
   public IVFRNResult search(
-      RandomAccessVectorValues.Floats dataVectors, float[] query, int k, int nProbe, int B_QUERY)
+      RandomAccessVectorValues.Floats dataVectors, float[] query, Arena offHeap, MemorySegment[] binaryCodeP, int k, int nProbe, int B_QUERY)
       throws IOException {
     // FIXME: FUTURE - implement fast scan and do a comparison
 
@@ -369,7 +372,7 @@ public class IVFRN {
     // FIXME: FUTURE - hardcoded
     int maxEstimatorSize = 500;
     PriorityQueue<Result> estimatorDistances =
-        new PriorityQueue<>(maxEstimatorSize, Comparator.reverseOrder());
+            new PriorityQueue<>(maxEstimatorSize, Comparator.reverseOrder());
 
     float errorBoundAvg = 0f;
     int errorBoundTotalCalcs = 0;
@@ -401,14 +404,16 @@ public class IVFRN {
       int facCounter = startC;
       int bCounter = startC;
 
+      MemorySegment quantQueryP = offHeap.allocateArray(ValueLayout.JAVA_LONG, quantQuery);
+
       for (int i = 0; i < len[c]; i++) {
-        long qcDist = SpaceUtils.ipByteBin(quantQuery, binaryCode[bCounter], B_QUERY, B);
+        long qcDist = IpByteBinLibrary.ipByteBinNative(quantQueryP, binaryCodeP[bCounter], B);
 
         float tmpDist =
-            fac[facCounter].sqrX()
-                + sqrY
-                + fac[facCounter].factorPPC() * vl
-                + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
+                fac[facCounter].sqrX()
+                        + sqrY
+                        + fac[facCounter].factorPPC() * vl
+                        + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
         float errorBound = y * (fac[facCounter].error());
         float estimator = tmpDist - errorBound;
 
@@ -434,7 +439,7 @@ public class IVFRN {
       if (res.sqrY() < distK) {
         floatingPointOps++;
         float gt_dist =
-            VectorUtils.squareDistance(dataVectors.vectorValue(dataMapping[res.c()]), query);
+                VectorUtils.squareDistance(dataVectors.vectorValue(dataMapping[res.c()]), query);
         if (gt_dist < distK) {
           knns.add(new Result(gt_dist, id[res.c()]));
           if (knns.size() > k) {
@@ -448,11 +453,11 @@ public class IVFRN {
     }
 
     IVFRNStats stats =
-        new IVFRNStats(
-            maxEstimatorSize,
-            totalEstimatorQueueAdds,
-            floatingPointOps,
-            errorBoundAvg / errorBoundTotalCalcs);
+            new IVFRNStats(
+                    maxEstimatorSize,
+                    totalEstimatorQueueAdds,
+                    floatingPointOps,
+                    errorBoundAvg / errorBoundTotalCalcs);
     return new IVFRNResult(knns, stats);
   }
 

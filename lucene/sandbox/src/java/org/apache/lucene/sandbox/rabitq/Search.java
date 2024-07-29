@@ -2,6 +2,9 @@ package org.apache.lucene.sandbox.rabitq;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -59,7 +62,7 @@ public class Search {
         IndexInput vectorInput = directory.openInput(dataPath, IOContext.DEFAULT);
         IndexInput queryInput = directory.openInput(queryPath, IOContext.READONCE)) {
       RandomAccessVectorValues.Floats queryVectors =
-          new VectorsReaderWithOffset(queryInput, 1000, dimensions);
+          new VectorsReaderWithOffset(queryInput, 10000, dimensions);
       RandomAccessVectorValues.Floats dataVectors =
           new VectorsReaderWithOffset(vectorInput, Index.QUORA_E5_DOC_SIZE, dimensions);
       if (doHnsw) {
@@ -188,38 +191,48 @@ public class Search {
     int floatingPointOps = 0;
     System.out.println("Starting search");
     for (int i = 0; i < queryVectors.size(); i++) {
-      long startTime = System.nanoTime();
-      float[] queryVector = queryVectors.vectorValue(i);
-      IVFRNResult result = ivf.search(dataVectors, queryVector, k, nprobes, B_QUERY);
-      PriorityQueue<Result> KNNs = result.results();
-      IVFRNStats stats = result.stats();
-      float usertime =
-          (System.nanoTime() - startTime)
-              / 1e3f; // convert to microseconds to compare to the c impl
-      totalUsertime += usertime;
 
-      PriorityQueue<Result> copyOfKNN = new PriorityQueue<>();
-      copyOfKNN.addAll(KNNs);
+      try (Arena offHeap = Arena.ofConfined()) {
 
-      int correct = 0;
-      while (!KNNs.isEmpty()) {
-        int id = KNNs.remove().c();
-        for (int j = 0; j < k; j++) {
-          if (id == G[i][j]) {
-            correct++;
+        MemorySegment[] binaryCodeP = new MemorySegment[ivf.binaryCode.length];
+
+        for(int t = 0; t < ivf.binaryCode.length; t++) {
+          binaryCodeP[t] = offHeap.allocateArray(ValueLayout.JAVA_LONG, ivf.binaryCode[t]);
+        }
+
+        long startTime = System.nanoTime();
+        float[] queryVector = queryVectors.vectorValue(i);
+        IVFRNResult result = ivf.search(dataVectors, queryVector, offHeap, binaryCodeP, k, nprobes, B_QUERY);
+        PriorityQueue<Result> KNNs = result.results();
+        IVFRNStats stats = result.stats();
+        float usertime =
+                (System.nanoTime() - startTime)
+                        / 1e3f; // convert to microseconds to compare to the c impl
+        totalUsertime += usertime;
+
+        PriorityQueue<Result> copyOfKNN = new PriorityQueue<>();
+        copyOfKNN.addAll(KNNs);
+
+        int correct = 0;
+        while (!KNNs.isEmpty()) {
+          int id = KNNs.remove().c();
+          for (int j = 0; j < k; j++) {
+            if (id == G[i][j]) {
+              correct++;
+            }
           }
         }
-      }
-      correctCount += correct;
+        correctCount += correct;
 
-      if (i % 1500 == 0) {
-        System.out.print(".");
-      }
+        if (i % 1500 == 0) {
+          System.out.print(".");
+        }
 
-      errorBoundAvg += stats.errorBoundAvg();
-      maxEstimatorSize = stats.maxEstimatorSize();
-      totalEstimatorAdds += stats.totalEstimatorQueueAdds();
-      floatingPointOps += stats.floatingPointOps();
+        errorBoundAvg += stats.errorBoundAvg();
+        maxEstimatorSize = stats.maxEstimatorSize();
+        totalEstimatorAdds += stats.totalEstimatorQueueAdds();
+        floatingPointOps += stats.floatingPointOps();
+      }
     }
     System.out.println();
 
