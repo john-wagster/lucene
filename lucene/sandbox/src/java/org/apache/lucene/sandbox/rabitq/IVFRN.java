@@ -430,6 +430,7 @@ public class IVFRN {
         float OrC2 = fac[facCounter].sqrX();
 
         // ∥q𝑟 − c∥^2
+        float QrC = y;
         float QrC2 = sqrY;
 
         //// Paper Formulas
@@ -450,20 +451,29 @@ public class IVFRN {
         float tmpDist = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2) * fac[facCounter].factorIP() * width;
 
         // TEMPORARY FACTORS - can precompute several of these
-        float[] o = dataVectors.vectorValue(dataMapping[startC]+i);
-        float OC = VectorUtil.squareDistance(o, centroids[c]);
-        float QC = VectorUtil.squareDistance(query, centroids[c]);
-        float OdC = VectorUtil.dotProduct(o, centroids[c]);
-        float[] QmC = Arrays.copyOf(query, query.length);
-        MatrixUtils.partialSubtract(QmC, centroids[c]);
-        float QmCdC = VectorUtil.dotProduct(QmC, centroids[c]);
-        float OQ = VectorUtil.dotProduct(o, query);
-        float centroidNorm = MatrixUtils.partialNormForRow(centroids[c]);
-        float QdC = VectorUtil.dotProduct(query, centroids[c]);
+        float[] O = dataVectors.vectorValue(dataMapping[startC]+i);
+        float[] C = centroids[c];
+        float OC = norm(subtract(O, C));
+        float QC = norm(subtract(query, C));
+        float OdC = VectorUtil.dotProduct(O, C);
+        float[] QmC = subtract(query, C);
+        float QmCdC = VectorUtil.dotProduct(QmC, C);
+        float Cnorm = norm(C);
+        float QdC = VectorUtil.dotProduct(query, C);
+        float[] OmC = subtract(O, C);
 
         // TARGET (footnote 8)
         // ⟨o, q⟩ = ∥o − c∥ · ∥q − c∥ · ⟨(o − c)/∥o − c∥, (q − c)/∥q − c∥ ⟩ + ⟨o, c⟩ + ⟨q, c⟩ − ∥c∥^2
-        // tmpDist = (float) Math.sqrt(OrC2) * (float) Math.sqrt(QrC2) * tmpDist + OC + QC - (float) Math.pow(calculateMagnitude(centroids[c]), 2);
+        // tmpDist = (float) Math.sqrt(OrC2) * QrC * tmpDist + OC + QC - (float) Math.pow(normC, 2);
+//        tmpDist = (float) Math.sqrt(OrC2) * QrC * 1 + OC + QC - (float) Math.pow(normC, 2);
+//
+        float rbq = VectorUtil.dotProduct(
+                divide(OmC, norm(OmC)),
+                divide(QmC, norm(QmC)));
+        tmpDist = OC * QC * rbq + OdC + QdC - (float) Math.pow(Cnorm, 2);  // 100% RECALL w tmpDist below
+//
+//        float rbq = 1;
+//        tmpDist = OC * QC * tmpDist + OdC + QdC - (float) Math.pow(Cnorm, 2);
 
         // ALT 1 (gaoj0017)
         // ⟨o, q⟩ = ∥o𝑟 − c∥ · ∥q𝑟∥ · ⟨o, q𝑟 / ∥q𝑟∥⟩ + ⟨c,q𝑟⟩
@@ -478,15 +488,19 @@ public class IVFRN {
         // tmpDist = distToC[bCounter] * y * tmpDist + QdC + OdC - centroidNorm;
 
          // baseline
-        tmpDist = VectorUtil.dotProduct(o, query);
+//        float truth = VectorUtil.scaleMaxInnerProductScore(VectorUtil.dotProduct(o, query));   // 100% RECALL on 5 query vectors
+//        tmpDist = truth;
         /////////////////////
 
+        // FIXME: validate the error bound
         float errorBound = y * (fac[facCounter].error());
-        float estimator = tmpDist - errorBound;
+//        float estimator = tmpDist - errorBound;
+        float estimator = tmpDist + errorBound;
+//        float estimator = truth;  // 100% RECALL on 5 query vectors
 
         ////////////////////
         //FIXME: OPERATE ON ESTIMATOR INSTEAD OF TMPDIST??? ... invert here???
-        estimator = VectorUtil.scaleMaxInnerProductScore(estimator);
+//        estimator = VectorUtil.scaleMaxInnerProductScore(estimator);
         ////////////////////
 
         if (estimatorDistances.size() < maxEstimatorSize) {
@@ -542,16 +556,24 @@ public class IVFRN {
     return VectorUtil.scaleMaxInnerProductScore(VectorUtil.dotProduct(a, b));
   }
 
-  public static double calculateMagnitude(float[] vector) {
-    if (vector == null || vector.length < 1) {
-      throw new IllegalArgumentException("Input vector must not be empty.");
+  public static float[] divide(float[] a, float b) {
+    float[] c = new float[a.length];
+    for (int j = 0; j < a.length; j++) {
+      c[j] = a[j] / b;
     }
+    return c;
+  }
 
-    double sumOfSquares = 0;
-    for (float component : vector) {
-      sumOfSquares += Math.pow(component, 2);
+  public static float[] subtract(float[] a, float[] b) {
+    float[] c = new float[a.length];
+    for (int j = 0; j < a.length; j++) {
+      c[j] = a[j] - b[j];
     }
-    return Math.sqrt(sumOfSquares);
+    return c;
+  }
+
+  public static float norm(float[] vector) {
+    return MatrixUtils.partialNormForRow(vector);
   }
 
   public int getC() {
