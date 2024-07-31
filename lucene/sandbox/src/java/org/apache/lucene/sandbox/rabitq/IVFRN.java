@@ -422,6 +422,16 @@ public class IVFRN {
       int bCounter = startC;
 
 
+      // TEMPORARY FACTORS - can precompute several of these
+      float[] C = centroids[c];
+      float QC = norm(subtract(query, C));
+      float[] QmC = subtract(query, C);
+      float QmCdC = VectorUtil.dotProduct(QmC, C);
+      float Cnorm = norm(C);
+      float QdC = VectorUtil.dotProduct(query, C);
+      float Qnorm = norm(query);
+      float[] QdQnorm = divide(query, Qnorm);
+
       for (int i = 0; i < len[c]; i++) {
         // ⟨x¯𝑏, q𝑢¯(𝑗)⟩
         long qcDist = SpaceUtils.ipByteBinBytePan(quantQuery, binaryCode[bCounter]);
@@ -444,48 +454,47 @@ public class IVFRN {
         // errorBound = √︄((1 − ⟨o¯, o⟩^2) / ⟨o¯, o⟩^2) * (𝜖0 / √(𝐷 − 1))
         ////
 
-        // ORIGINAL
-        // float tmpDist = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
+        // ORIGINAL RBQ estimator
+//         float tmpDist = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
 
-        // ALT RBQ factor
-        float tmpDist = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2) * fac[facCounter].factorIP() * width;
+        // ALT RBQ factor estimator
+//        float tmpDist = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2) * fac[facCounter].factorIP() * width;
+
+        // ALT RBQ factor estimator
+        float tmpDist = fac[facCounter].factorPPC() * vl + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
+//        tmpDist = tmpDist * 0.001f;
+//        tmpDist = tmpDist / (float) Math.pow(Cnorm, 2);
 
         // TEMPORARY FACTORS - can precompute several of these
         float[] O = dataVectors.vectorValue(dataMapping[startC]+i);
-        float[] C = centroids[c];
         float OC = norm(subtract(O, C));
-        float QC = norm(subtract(query, C));
         float OdC = VectorUtil.dotProduct(O, C);
-        float[] QmC = subtract(query, C);
-        float QmCdC = VectorUtil.dotProduct(QmC, C);
-        float Cnorm = norm(C);
-        float QdC = VectorUtil.dotProduct(query, C);
         float[] OmC = subtract(O, C);
+        float OdQdvQnorm = VectorUtil.dotProduct(O, QdQnorm);
 
         // TARGET (footnote 8)
         // ⟨o, q⟩ = ∥o − c∥ · ∥q − c∥ · ⟨(o − c)/∥o − c∥, (q − c)/∥q − c∥ ⟩ + ⟨o, c⟩ + ⟨q, c⟩ − ∥c∥^2
-        // tmpDist = (float) Math.sqrt(OrC2) * QrC * tmpDist + OC + QC - (float) Math.pow(normC, 2);
-//        tmpDist = (float) Math.sqrt(OrC2) * QrC * 1 + OC + QC - (float) Math.pow(normC, 2);
-//
         float rbq = VectorUtil.dotProduct(
                 divide(OmC, norm(OmC)),
                 divide(QmC, norm(QmC)));
-        tmpDist = OC * QC * rbq + OdC + QdC - (float) Math.pow(Cnorm, 2);  // 100% RECALL w tmpDist below
-//
-//        float rbq = 1;
-//        tmpDist = OC * QC * tmpDist + OdC + QdC - (float) Math.pow(Cnorm, 2);
+        tmpDist = OC * QC * rbq + OdC + QdC - (float) Math.pow(Cnorm, 2);  // 100% RECALL on 5 query vectors
+//        tmpDist = OC * QC * tmpDist + OdC + QdC - (float) Math.pow(Cnorm, 2);  // ??% RECALL on 5 query vectors
+
 
         // ALT 1 (gaoj0017)
         // ⟨o, q⟩ = ∥o𝑟 − c∥ · ∥q𝑟∥ · ⟨o, q𝑟 / ∥q𝑟∥⟩ + ⟨c,q𝑟⟩
-        // tmpDist = OC * (float) calculateMagnitude(query) * tmpDist + QC;
+//        tmpDist = OC * norm(query) * OdQdvQnorm + QdC; // 24% RECALL on 5 query vectors
+//        tmpDist = OC * norm(query) * tmpDist + QdC;   // ??% RECALL on 5 query vectors
 
         // ALT 2 (VoVAllen)
         // ⟨o𝑟, q𝑟⟩ = ⟨o, q⟩ · ∥o𝑟 − c∥ · ∥q𝑟 - c∥ + ⟨c, o𝑟⟩ + ⟨c, q𝑟 - c⟩
-        // tmpDist = tmpDist * OC * QC + OdC + QmCdC;
+//         tmpDist = tmpDist * OC * QC + OdC + QmCdC; // 0% RECALL on 5 query vectors
 
         // ben
-        // tmpDist = (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width; // regular rbq
-        // tmpDist = distToC[bCounter] * y * tmpDist + QdC + OdC - centroidNorm;
+//         tmpDist = (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width; // regular rbq
+//        tmpDist = (qcDist * 2) * fac[facCounter].factorIP() * width; // regular rbq w/o sumQ
+//        tmpDist = distToC[bCounter] * y * tmpDist + QdC + OdC - Cnorm; // 0% REACLL on 5 query vectors
+//        tmpDist = OdC * OC * tmpDist + QdC + OdC - Cnorm;
 
          // baseline
 //        float truth = VectorUtil.scaleMaxInnerProductScore(VectorUtil.dotProduct(o, query));   // 100% RECALL on 5 query vectors
