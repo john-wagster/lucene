@@ -11,6 +11,7 @@ public class SpaceUtils {
 
   private static final VectorSpecies<Byte> BYTE_SPECIES = ByteVector.SPECIES_PREFERRED;
 
+  // 𝐵𝑞 = Θ(log log𝐷)
   public static final int B_QUERY = 4;
 
   public static int popcount(byte[] d, int B) {
@@ -68,14 +69,14 @@ public class SpaceUtils {
     return ret;
   }
 
-  public static byte[] transposeBin(byte[] q, int D) {
+  public static byte[] transposeBinByte(byte[] q, int D) {
     // FIXME: rewrite this function to no longer use longs
     // FIXME: FUTURE - verify B_QUERY > 0
     // FIXME: rewrite with panama?
     assert B_QUERY > 0;
 
     int B = (D + 63) / 64 * 64;
-    long[] quantQuery = new long[B_QUERY * B / 64];
+    byte[] quantQueryByte = new byte[B_QUERY * B / 8];
 
     int byte_mask = 1;
     for (int i = 0; i < B_QUERY - 1; i++) {
@@ -91,15 +92,10 @@ public class SpaceUtils {
       int shift = 8 - B_QUERY;
       for (int j = 0; j < v.length; j += 4) {
         byte[] s = new byte[4];
-        s[0] = (byte) (q[qOffset + j] << shift);
-        s[1] =
-            (byte) (q[qOffset + j + 1] << shift | ((q[qOffset + j] >>> (8 - shift)) & byte_mask));
-        s[2] =
-            (byte)
-                (q[qOffset + j + 2] << shift | ((q[qOffset + j + 1] >>> (8 - shift)) & byte_mask));
-        s[3] =
-            (byte)
-                (q[qOffset + j + 3] << shift | ((q[qOffset + j + 2] >>> (8 - shift)) & byte_mask));
+        s[0] = (byte) (q[qOffset + j] << shift | ((q[qOffset + j] >>> (8 - shift)) & byte_mask));
+        s[1] = (byte) (q[qOffset + j + 1] << shift | ((q[qOffset + j + 1] >>> (8 - shift)) & byte_mask));
+        s[2] = (byte) (q[qOffset + j + 2] << shift | ((q[qOffset + j + 2] >>> (8 - shift)) & byte_mask));
+        s[3] = (byte) (q[qOffset + j + 3] << shift | ((q[qOffset + j + 3] >>> (8 - shift)) & byte_mask));
 
         v[j] = s[0];
         v[j + 1] = s[1];
@@ -108,50 +104,39 @@ public class SpaceUtils {
       }
 
       for (int j = 0; j < B_QUERY; j++) {
-        long v1 = moveMaskEpi8(v);
-        // v1 = reverseBits(v1); // our move mask does this operation for us
-        quantQuery[(B_QUERY - j - 1) * (B / 64) + i / 64] |= (v1 << ((i / 32 % 2 == 0) ? 32 : 0));
+        byte[] v1 = moveMaskEpi8Byte(v);
+        for (int k = 0; k < 4; k++) {
+          quantQueryByte[(B_QUERY - j - 1) * (B / 8) + i / 8 + k] = v1[k];
+        }
 
         for (int k = 0; k < v.length; k += 4) {
-          ByteBuffer bb = ByteBuffer.allocate(4);
-          for (int l = 3; l >= 0; l--) {
-            bb.put(v[k + l]);
-          }
-          bb.flip();
-          int value = bb.getInt();
-          value += value;
-          byte[] sumSubV = ByteBuffer.allocate(4).putInt(value).array();
-          v[k] = sumSubV[3];
-          v[k + 1] = sumSubV[2];
-          v[k + 2] = sumSubV[1];
-          v[k + 3] = sumSubV[0];
+          v[k] = (byte) (v[k] + v[k]);
+          v[k+1] = (byte) (v[k+1] + v[k+1]);
+          v[k+2] = (byte) (v[k+2] + v[k+2]);
+          v[k+3] = (byte) (v[k+3] + v[k+3]);
         }
       }
       qOffset += 32;
     }
 
-    ByteBuffer bb = ByteBuffer.allocate((B / 8) * B_QUERY);
-    for (int j = 0; j < quantQuery.length; j++) {
-      bb.putLong(quantQuery[j]);
-    }
-    bb.flip();
-    return bb.array();
+    return quantQueryByte;
   }
 
-  private static long moveMaskEpi8(byte[] v) {
-    long v1 = 0;
+  private static byte[] moveMaskEpi8Byte(byte[] v) {
+    byte[] v1b = new byte[4];
+    int m = 0;
     for (int k = 0; k < v.length; k++) {
       if ((v[k] & 0b10000000) == 0b10000000) {
-        v1 |= 0b00000001;
-      } else {
-        v1 |= 0b00000000;
+        v1b[m] |= 0b00000001;
       }
-      if (k != v.length - 1) {
-        v1 <<= 1;
+      if (k % 8 == 7) {
+        m++;
+      } else {
+        v1b[m] <<= 1;
       }
     }
 
-    return v1;
+    return v1b;
   }
 
   public static float[] range(float[] q, float[] c) {

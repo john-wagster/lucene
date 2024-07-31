@@ -41,9 +41,9 @@ public class Search {
     boolean doHnsw = false;
     int maxConns = 16;
     int beamWidth = 100;
-    if (args.length > 7) {
+    if (args.length > 6) {
       doHnsw = Boolean.parseBoolean(args[6]);
-      if (args.length > 8) {
+      if (args.length > 7) {
         maxConns = Integer.parseInt(args[7]);
         beamWidth = Integer.parseInt(args[8]);
       }

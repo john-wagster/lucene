@@ -10,7 +10,12 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 import java.util.Random;
+
+import org.apache.lucene.util.VectorUtil;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
+
+import static org.apache.lucene.util.VectorUtil.dotProduct;
+import static org.apache.lucene.util.VectorUtil.scaleMaxInnerProductScore;
 
 public class IVFRN {
   private Factor[] fac;
@@ -272,14 +277,12 @@ public class IVFRN {
       // FIXME: speed up with panama
       Factor[] fac = new Factor[N];
       for (int i = 0; i < N; i++) {
-        double x_x0 = distToC[i] / x0[i];
+        double x_x0 = distToC[i] / x0[i]; // ∥o𝑟 − c∥ / <o¯, o>
         float sqrX = distToC[i] * distToC[i];
-        float error = (float) (2.0 * max_x1 * Math.sqrt(x_x0 * x_x0 - distToC[i] * distToC[i]));
-        float factorPPC =
-            (float)
-                (-2.0
-                    / fac_norm
-                    * x_x0
+        float error = (float) (2.0 * max_x1
+                * Math.sqrt(x_x0 * x_x0 - distToC[i] * distToC[i]));
+        float factorPPC = (float)
+                (-2.0 / fac_norm * x_x0
                     * ((float) SpaceUtils.popcount(binaryCode[i], B) * 2.0 - B));
         float factorIP = (float) (-2.0 / fac_norm * x_x0);
         fac[i] = new Factor(sqrX, error, factorPPC, factorIP);
@@ -317,7 +320,7 @@ public class IVFRN {
       byte[] byteQuery = quantResult.result();
       int sumQ = quantResult.sumQ();
 
-      byte[] quantQuery = SpaceUtils.transposeBin(byteQuery, D);
+      byte[] quantQuery = SpaceUtils.transposeBinByte(byteQuery, D);
       quantizedQueries[c] = new QuantizedQuery(quantQuery, sumQ, sqrY, vl, width, c);
     }
     return quantizedQueries;
@@ -351,8 +354,10 @@ public class IVFRN {
     // FIXME: FUTURE - implement fast scan and do a comparison
 
     assert nProbe < C;
-    float distK = Float.MAX_VALUE;
-    PriorityQueue<Result> knns = new PriorityQueue<>(k, Comparator.reverseOrder());
+//    float distK = Float.MAX_VALUE;
+    float distK = Float.MIN_VALUE;
+//    PriorityQueue<Result> knns = new PriorityQueue<>(k, Comparator.reverseOrder());
+    PriorityQueue<Result> knns = new PriorityQueue<>(k);
 
     // Find out the nearest N_{probe} centroids to the query vector.
     PriorityQueue<Result> topNProbeCentroids = new PriorityQueue<>(nProbe);
@@ -368,8 +373,10 @@ public class IVFRN {
     // FIXME: FUTURE - don't use the Result class for this; it's confusing
     // FIXME: FUTURE - hardcoded
     int maxEstimatorSize = 500;
+//    PriorityQueue<Result> estimatorDistances =
+//        new PriorityQueue<>(maxEstimatorSize, Comparator.reverseOrder());
     PriorityQueue<Result> estimatorDistances =
-        new PriorityQueue<>(maxEstimatorSize, Comparator.reverseOrder());
+            new PriorityQueue<>(maxEstimatorSize);
 
     float errorBoundAvg = 0f;
     int errorBoundTotalCalcs = 0;
@@ -386,14 +393,27 @@ public class IVFRN {
       // Preprocess the residual query and the quantized query
       float[] v = SpaceUtils.range(query, centroids[c]);
       float vl = v[0], vr = v[1];
+      // Δ := (𝑣𝑟 − 𝑣𝑙)/(2𝐵𝑞 − 1)
       float width = (vr - vl) / ((1 << SpaceUtils.B_QUERY) - 1);
 
+      //////////////
+//      float[] normQuery = new float[query.length];
+//      float norm = (float) calculateMagnitude(query);
+//      for(int i = 0; i < query.length; i++) {
+//        normQuery[i] = query[i] / norm;
+//      }
+      ///////////////
+
+      // query = q′
       QuantResult quantResult = SpaceUtils.quantize(query, centroids[c], u, vl, width);
+      // q¯ = Δ · q¯𝑢 + 𝑣𝑙 · 1𝐷
+      // q¯ is an approximation of q′  (scalar quantized approximation)
       byte[] byteQuery = quantResult.result();
       int sumQ = quantResult.sumQ();
 
       // Binary String Representation
-      byte[] quantQuery = SpaceUtils.transposeBin(byteQuery, D);
+//      byte[] quantQuery = SpaceUtils.transposeBin(byteQuery, D);
+      byte[] quantQuery = SpaceUtils.transposeBinByte(byteQuery, D);
 
       int startC = start[c];
       float y = (float) Math.sqrt(sqrY);
@@ -401,21 +421,79 @@ public class IVFRN {
       int facCounter = startC;
       int bCounter = startC;
 
+
       for (int i = 0; i < len[c]; i++) {
+        // ⟨x¯𝑏, q𝑢¯(𝑗)⟩
         long qcDist = SpaceUtils.ipByteBinBytePan(quantQuery, binaryCode[bCounter]);
 
-        float tmpDist =
-            fac[facCounter].sqrX()
-                + sqrY
-                + fac[facCounter].factorPPC() * vl
-                + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
+        // ∥o𝑟 − c∥^2
+        float OrC2 = fac[facCounter].sqrX();
+
+        // ∥q𝑟 − c∥^2
+        float QrC2 = sqrY;
+
+        //// Paper Formulas
+        //∥o𝑟 − q𝑟∥^2 = ∥o𝑟 − c∥^2 + ∥q𝑟 − c∥^2 − 2·∥o𝑟 − c∥·∥q𝑟 − c∥·⟨q, o⟩
+        // estimator of ⟨o, q⟩ = ⟨o¯,q⟩ / ⟨o¯,o⟩ - errorBound
+        // where
+        // ⟨o¯, q⟩ = ⟨x¯, q′⟩ and ⟨x¯, q¯⟩ is a scalar quantized approximation
+        // ⟨x¯, q¯⟩ = ⟨(2x¯𝑏 − 1𝐷) / √𝐷, Δ · q¯𝑢 + 𝑣𝑙 · 1𝐷⟩
+        // ⟨x¯, q¯⟩ = (2Δ / √𝐷) * ⟨x¯𝑏, q′𝑢⟩ + (2𝑣𝑙 / √𝐷) * ∑︁𝐷𝑖=1(x¯𝑏[𝑖]) − Δ / √𝐷 * ∑︁𝐷𝑖=1(q¯𝑢 [𝑖]) − √𝐷 · 𝑣𝑙
+        // ⟨x¯𝑏, q¯𝑢⟩ = ∑︁𝐵q-1𝑗=0(2𝑗·⟨x¯𝑏, q𝑢¯(𝑗)⟩
+        // errorBound = √︄((1 − ⟨o¯, o⟩^2) / ⟨o¯, o⟩^2) * (𝜖0 / √(𝐷 − 1))
+        ////
+
+        // ORIGINAL
+        // float tmpDist = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
+
+        // ALT RBQ factor
+        float tmpDist = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2) * fac[facCounter].factorIP() * width;
+
+        // TEMPORARY FACTORS - can precompute several of these
+        float[] o = dataVectors.vectorValue(dataMapping[startC]+i);
+        float OC = VectorUtil.squareDistance(o, centroids[c]);
+        float QC = VectorUtil.squareDistance(query, centroids[c]);
+        float OdC = VectorUtil.dotProduct(o, centroids[c]);
+        float[] QmC = Arrays.copyOf(query, query.length);
+        MatrixUtils.partialSubtract(QmC, centroids[c]);
+        float QmCdC = VectorUtil.dotProduct(QmC, centroids[c]);
+        float OQ = VectorUtil.dotProduct(o, query);
+        float centroidNorm = MatrixUtils.partialNormForRow(centroids[c]);
+        float QdC = VectorUtil.dotProduct(query, centroids[c]);
+
+        // TARGET (footnote 8)
+        // ⟨o, q⟩ = ∥o − c∥ · ∥q − c∥ · ⟨(o − c)/∥o − c∥, (q − c)/∥q − c∥ ⟩ + ⟨o, c⟩ + ⟨q, c⟩ − ∥c∥^2
+        // tmpDist = (float) Math.sqrt(OrC2) * (float) Math.sqrt(QrC2) * tmpDist + OC + QC - (float) Math.pow(calculateMagnitude(centroids[c]), 2);
+
+        // ALT 1 (gaoj0017)
+        // ⟨o, q⟩ = ∥o𝑟 − c∥ · ∥q𝑟∥ · ⟨o, q𝑟 / ∥q𝑟∥⟩ + ⟨c,q𝑟⟩
+        // tmpDist = OC * (float) calculateMagnitude(query) * tmpDist + QC;
+
+        // ALT 2 (VoVAllen)
+        // ⟨o𝑟, q𝑟⟩ = ⟨o, q⟩ · ∥o𝑟 − c∥ · ∥q𝑟 - c∥ + ⟨c, o𝑟⟩ + ⟨c, q𝑟 - c⟩
+        // tmpDist = tmpDist * OC * QC + OdC + QmCdC;
+
+        // ben
+        // tmpDist = (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width; // regular rbq
+        // tmpDist = distToC[bCounter] * y * tmpDist + QdC + OdC - centroidNorm;
+
+         // baseline
+        tmpDist = VectorUtil.dotProduct(o, query);
+        /////////////////////
+
         float errorBound = y * (fac[facCounter].error());
         float estimator = tmpDist - errorBound;
+
+        ////////////////////
+        //FIXME: OPERATE ON ESTIMATOR INSTEAD OF TMPDIST??? ... invert here???
+        estimator = VectorUtil.scaleMaxInnerProductScore(estimator);
+        ////////////////////
 
         if (estimatorDistances.size() < maxEstimatorSize) {
           totalEstimatorQueueAdds++;
           estimatorDistances.add(new Result(estimator, startC + i));
-        } else if (estimator < estimatorDistances.peek().sqrY()) {
+//        } else if (estimator < estimatorDistances.peek().sqrY()) {
+        } else if (estimator > estimatorDistances.peek().sqrY()) {
           totalEstimatorQueueAdds++;
           estimatorDistances.poll();
           estimatorDistances.add(new Result(estimator, startC + i));
@@ -431,11 +509,15 @@ public class IVFRN {
     int size = estimatorDistances.size();
     for (int i = 0; i < size; i++) {
       Result res = estimatorDistances.remove();
-      if (res.sqrY() < distK) {
+//      if (res.sqrY() < distK) {
+      if (res.sqrY() > distK) {
         floatingPointOps++;
         float gt_dist =
-            VectorUtils.squareDistance(dataVectors.vectorValue(dataMapping[res.c()]), query);
-        if (gt_dist < distK) {
+//            VectorUtils.squareDistance(dataVectors.vectorValue(dataMapping[res.c()]), query);
+//            VectorUtil.dotProduct(dataVectors.vectorValue(dataMapping[res.c()]), query);
+                mip(dataVectors.vectorValue(dataMapping[res.c()]), query);
+//        if (gt_dist < distK) {
+        if (gt_dist > distK) {
           knns.add(new Result(gt_dist, id[res.c()]));
           if (knns.size() > k) {
             knns.remove();
@@ -454,6 +536,22 @@ public class IVFRN {
             floatingPointOps,
             errorBoundAvg / errorBoundTotalCalcs);
     return new IVFRNResult(knns, stats);
+  }
+
+  public static float mip(float[] a, float[] b) {
+    return VectorUtil.scaleMaxInnerProductScore(VectorUtil.dotProduct(a, b));
+  }
+
+  public static double calculateMagnitude(float[] vector) {
+    if (vector == null || vector.length < 1) {
+      throw new IllegalArgumentException("Input vector must not be empty.");
+    }
+
+    double sumOfSquares = 0;
+    for (float component : vector) {
+      sumOfSquares += Math.pow(component, 2);
+    }
+    return Math.sqrt(sumOfSquares);
   }
 
   public int getC() {

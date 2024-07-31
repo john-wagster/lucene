@@ -106,6 +106,7 @@ public class Index {
       float[] XP = MatrixUtils.partialPadColumns(X, MAX_BD - D); // typically no-op if D/64
 
       MatrixUtils.partialSubtract(XP, CP[clusterIds[i]]);
+      float[] XmC = XP;
 
       // The inner product between the data vector and the quantized data vector
       float norm = MatrixUtils.partialNormForRow(XP);

@@ -1,5 +1,7 @@
 package org.apache.lucene.sandbox.rabitq;
 
+import org.apache.lucene.util.VectorUtil;
+
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -8,7 +10,7 @@ import java.util.TreeSet;
 
 public class BruteForce {
 
-  private static final int KNN = 100;
+  private static final int KNN = 10;
 
   record Pair(Float distance, Integer index) {}
 
@@ -18,25 +20,26 @@ public class BruteForce {
 
     int iterations = 0;
     int[][] groundTruth = new int[queries.length][KNN];
-    for (int i = 0; i < queries.length; i++) {
+    for (int i = 0; i < 50; i++) {
       TreeSet<Pair> topKNNDistances =
           new TreeSet<>(
-              new Comparator<Pair>() {
-                @Override
-                public int compare(Pair o1, Pair o2) {
-                  if (o1.distance > o2.distance) {
-                    return 1;
-                  } else {
-                    return -1;
-                  }
-                }
-              });
+                  (o1, o2) -> {
+                    if (o1.distance > o2.distance) {
+                      return -1;
+                    } else {
+                      return 1;
+                    }
+                  });
       boolean filledKNN = false;
 
-      float furtherestTopKNN = Float.MAX_VALUE;
+//      float furtherestTopKNN = Float.MAX_VALUE;
+      float furtherestTopKNN = Float.MIN_VALUE;
       for (int j = 0; j < corpus.length; j++) {
-        float distance = VectorUtils.squareDistance(queries[i], corpus[j]);
-        if (distance < furtherestTopKNN) {
+//        float distance = VectorUtils.squareDistance(queries[i], corpus[j]);
+//        float distance = VectorUtil.dotProduct(queries[i], corpus[j]);
+        float distance = VectorUtil.scaleMaxInnerProductScore(VectorUtil.dotProduct(queries[i], corpus[j]));
+//        if (distance < furtherestTopKNN) {
+        if (distance > furtherestTopKNN) {
           topKNNDistances.add(new Pair(distance, j));
           if (!filledKNN) {
             if (topKNNDistances.size() == KNN) {
