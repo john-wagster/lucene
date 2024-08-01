@@ -1,7 +1,11 @@
 package org.apache.lucene.sandbox.rabitq;
 
+import java.io.BufferedWriter;
+import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -432,6 +436,13 @@ public class IVFRN {
       float Qnorm = norm(query);
       float[] QdQnorm = divide(query, Qnorm);
 
+      float avgDiff = 0f;
+      float[] tmpdists = new float[len[c]];
+      float[] rbqs = new float[len[c]];
+      float[] estimators = new float[len[c]];
+      float[] reals = new float[len[c]];
+      float[] rbqEsts = new float[len[c]];
+
       for (int i = 0; i < len[c]; i++) {
         // ⟨x¯𝑏, q𝑢¯(𝑗)⟩
         long qcDist = SpaceUtils.ipByteBinBytePan(quantQuery, binaryCode[bCounter]);
@@ -455,15 +466,20 @@ public class IVFRN {
         ////
 
         // ORIGINAL RBQ estimator
-//         float tmpDist = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
+//         float rbqEst = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
 
         // ALT RBQ factor estimator
-//        float tmpDist = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2) * fac[facCounter].factorIP() * width;
+//        float rbqEst = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2) * fac[facCounter].factorIP() * width;
 
         // ALT RBQ factor estimator
-        float tmpDist = fac[facCounter].factorPPC() * vl + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
-//        tmpDist = tmpDist * 0.001f;
-//        tmpDist = tmpDist / (float) Math.pow(Cnorm, 2);
+        float rbqEst = fac[facCounter].factorPPC() * vl + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
+//        float rbqEst = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
+
+//        rbqEst = rbqEst * 0.001f;
+        rbqEst = rbqEst / (float) Math.pow(Cnorm, 2);
+//        rbqEst = rbqEst / Cnorm; // <--- FIXME: This should be what rbqEst is???? and remove 275 below ... why doesn't that work!
+//        rbqEst = rbqEst * 0.0045215f;
+        //FIXME: get the actual factor here by dividing rbq by tmpdist & scatterplot
 
         // TEMPORARY FACTORS - can precompute several of these
         float[] O = dataVectors.vectorValue(dataMapping[startC]+i);
@@ -477,9 +493,18 @@ public class IVFRN {
         float rbq = VectorUtil.dotProduct(
                 divide(OmC, norm(OmC)),
                 divide(QmC, norm(QmC)));
-        tmpDist = OC * QC * rbq + OdC + QdC - (float) Math.pow(Cnorm, 2);  // 100% RECALL on 5 query vectors
-//        tmpDist = OC * QC * tmpDist + OdC + QdC - (float) Math.pow(Cnorm, 2);  // ??% RECALL on 5 query vectors
-
+        float tmpDist2 = OC * QC * rbq + OdC + QdC - (float) Math.pow(Cnorm, 2);  // 100% RECALL on 5 query vectors
+        avgDiff += rbqEst / rbq;
+//        System.out.print(tmpDist + ", ");
+        rbqEsts[i] = rbqEst;
+        rbqs[i] = rbq;
+        reals[i] = tmpDist2;
+        float tmpDist = OC * QC * rbqEst + OdC + QdC - (float) Math.pow(Cnorm, 2);  // ??% RECALL on 5 query vectors
+//        tmpDist = 175-tmpDist+100;
+        tmpDist = 275-tmpDist;
+//        tmpDist = scaleMaxInnerProductScore(tmpDist);
+        tmpdists[i] = tmpDist;
+//        tmpDist = tmpDist2;
 
         // ALT 1 (gaoj0017)
         // ⟨o, q⟩ = ∥o𝑟 − c∥ · ∥q𝑟∥ · ⟨o, q𝑟 / ∥q𝑟∥⟩ + ⟨c,q𝑟⟩
@@ -497,14 +522,19 @@ public class IVFRN {
 //        tmpDist = OdC * OC * tmpDist + QdC + OdC - Cnorm;
 
          // baseline
-//        float truth = VectorUtil.scaleMaxInnerProductScore(VectorUtil.dotProduct(o, query));   // 100% RECALL on 5 query vectors
+        float truth = VectorUtil.scaleMaxInnerProductScore(VectorUtil.dotProduct(O, query));   // 100% RECALL on 5 query vectors
 //        tmpDist = truth;
         /////////////////////
 
+        // FIXME: need more centroids
         // FIXME: validate the error bound
-        float errorBound = y * (fac[facCounter].error());
+        float errorBound = y * fac[facCounter].error();
+//        float errorBound = y * (fac[facCounter].error()) * 0.1f;
+//        float errorBound = y * (fac[facCounter].error()) / (float) Math.pow(Cnorm, 2);
 //        float estimator = tmpDist - errorBound;
         float estimator = tmpDist + errorBound;
+//        float estimator = tmpDist; // - errorBound;
+        estimators[i] = estimator;
 //        float estimator = truth;  // 100% RECALL on 5 query vectors
 
         ////////////////////
@@ -527,6 +557,23 @@ public class IVFRN {
         bCounter++;
         facCounter++;
       }
+//      System.out.println("avg rbq diff: " + avgDiff / len[c]);
+      try (BufferedWriter outputWriter = new BufferedWriter(new FileWriter("tmpdists.out"));) {
+        outputWriter.write(Arrays.toString(tmpdists));
+      }
+      try (BufferedWriter outputWriter = new BufferedWriter(new FileWriter("rbqs.out"));) {
+        outputWriter.write(Arrays.toString(rbqs));
+      }
+      try (BufferedWriter outputWriter = new BufferedWriter(new FileWriter("fests.out"));) {
+        outputWriter.write(Arrays.toString(estimators));
+      }
+      try (BufferedWriter outputWriter = new BufferedWriter(new FileWriter("reals.out"));) {
+        outputWriter.write(Arrays.toString(reals));
+      }
+      try (BufferedWriter outputWriter = new BufferedWriter(new FileWriter("rbqests.out"));) {
+        outputWriter.write(Arrays.toString(rbqEsts));
+      }
+//      System.out.println("dists: " + tmpdists);
     }
 
     int size = estimatorDistances.size();
