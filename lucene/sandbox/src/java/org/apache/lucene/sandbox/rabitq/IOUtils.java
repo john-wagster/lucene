@@ -1,11 +1,16 @@
 package org.apache.lucene.sandbox.rabitq;
 
+import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.IOContext;
+import org.apache.lucene.store.IndexInput;
+
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class IOUtils {
@@ -92,6 +97,26 @@ public class IOUtils {
     }
 
     return data;
+  }
+
+  public static int[][] readGroundTruth(
+    String groundTruthFile, FSDirectory directory, int numQueries) throws IOException {
+    if (!Files.exists(directory.getDirectory().resolve(groundTruthFile))) {
+      return null;
+    }
+    int[][] groundTruths = new int[numQueries][];
+    // reading the ground truths from the file
+    try (IndexInput queryGroundTruthInput =
+           directory.openInput(groundTruthFile, IOContext.DEFAULT)) {
+      for (int i = 0; i < numQueries; i++) {
+        int length = queryGroundTruthInput.readInt();
+        groundTruths[i] = new int[length];
+        for (int j = 0; j < length; j++) {
+          groundTruths[i][j] = queryGroundTruthInput.readInt();
+        }
+      }
+    }
+    return groundTruths;
   }
 
   public static void toFvecs(FileOutputStream stream, float[][] data) throws IOException {

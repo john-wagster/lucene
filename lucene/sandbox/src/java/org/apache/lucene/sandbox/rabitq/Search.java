@@ -2,6 +2,7 @@ package org.apache.lucene.sandbox.rabitq;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -14,11 +15,14 @@ import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.util.InfoStream;
 import org.apache.lucene.util.PrintStreamInfoStream;
+import org.apache.lucene.util.hnsw.HnswGraph;
 import org.apache.lucene.util.hnsw.HnswGraphBuilder;
 import org.apache.lucene.util.hnsw.HnswGraphSearcher;
+import org.apache.lucene.util.hnsw.NeighborQueue;
 import org.apache.lucene.util.hnsw.OnHeapHnswGraph;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 import org.apache.lucene.util.hnsw.RandomVectorScorer;
@@ -41,9 +45,9 @@ public class Search {
     boolean doHnsw = false;
     int maxConns = 16;
     int beamWidth = 100;
-    if (args.length > 7) {
+    if (args.length > 6) {
       doHnsw = Boolean.parseBoolean(args[6]);
-      if (args.length > 8) {
+      if (args.length > 7) {
         maxConns = Integer.parseInt(args[7]);
         beamWidth = Integer.parseInt(args[8]);
       }
@@ -55,34 +59,86 @@ public class Search {
     String queryPath = String.format("%s%s_query.fvecs", source, dataset);
     String dataPath = String.format("%s%s_base.fvecs", source, dataset);
     String groundTruthPath = String.format("%s%s_groundtruth.ivecs", source, dataset);
-    int[][] G = IOUtils.readIvecs(new FileInputStream(groundTruthPath));
+
     String indexPath = String.format("%sivfrabitq%d_B%d.index", source, numCentroids, B);
     IVFRN ivfrn = IVFRN.load(indexPath);
+    int numDataVectors = ivfrn.getN();
     try (MMapDirectory directory = new MMapDirectory(basePath);
         IndexInput vectorInput = directory.openInput(dataPath, IOContext.DEFAULT);
         IndexInput queryInput = directory.openInput(queryPath, IOContext.READONCE)) {
       RandomAccessVectorValues.Floats queryVectors =
-          new VectorsReaderWithOffset(queryInput, totalQueryVectors, dimensions);
+        new VectorsReaderWithOffset(queryInput, totalQueryVectors, dimensions);
       RandomAccessVectorValues.Floats dataVectors =
-          new VectorsReaderWithOffset(vectorInput, ivfrn.getN(), dimensions);
+        new VectorsReaderWithOffset(vectorInput, numDataVectors, dimensions);
+      int[][] G = new int[totalQueryVectors][k];
+      if (Files.exists(directory.getDirectory().resolve(groundTruthPath))) {
+        G = IOUtils.readGroundTruth(groundTruthPath, directory, totalQueryVectors);
+      } else {
+        // writing to the ground truth file
+        System.out.println("Calculating nearest neighbors");
+        try (IndexOutput queryGroundTruthOutput =
+               directory.createOutput(groundTruthPath, IOContext.DEFAULT)) {
+          for (int i = 0; i < totalQueryVectors; i++) {
+            float[] candidate = queryVectors.vectorValue(i);
+            G[i] = getNN(dataVectors, candidate, k, VectorSimilarityFunction.EUCLIDEAN);
+            queryGroundTruthOutput.writeInt(G[i].length);
+            for (int doc : G[i]) {
+              queryGroundTruthOutput.writeInt(doc);
+            }
+            if (i % 10 == 0) {
+              System.out.print(".");
+            }
+          }
+        }
+        System.out.println("Done calculating nearest neighbors");
+      }
       if (doHnsw) {
         System.out.println(
-            "Building HNSW graph with maxConns=" + maxConns + " beamWidth=" + beamWidth);
-        RBQRandomVectorScorerSupplier scorerSupplier =
-            new RBQRandomVectorScorerSupplier(dataVectors, ivfrn);
+          "Building HNSW graph maxConns=" + maxConns + " beamWidth=" + beamWidth);
         HnswGraphBuilder hnsw =
-            HnswGraphBuilder.create(scorerSupplier, maxConns, beamWidth, 42, dataVectors.size());
-        hnsw.setInfoStream(infoStream);
+          HnswGraphBuilder.create(new RBQRandomVectorScorerSupplier(dataVectors, ivfrn), maxConns, beamWidth, 42, dataVectors.size());
+        //hnsw.setInfoStream(infoStream);
         long graphBuildTime = System.nanoTime();
         OnHeapHnswGraph graph = hnsw.build(dataVectors.size());
         graphBuildTime = System.nanoTime() - graphBuildTime;
         System.out.println(
-            "Graph build time: " + TimeUnit.NANOSECONDS.toMillis(graphBuildTime) + " ms");
-        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, 300);
+          "Graph build time: " + TimeUnit.NANOSECONDS.toMillis(graphBuildTime) + " ms");
+        System.out.println("WARM UP");
+        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, k);
+        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, k);
+        System.out.println("TESTING");
+        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, k);
+        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, k*2);
+        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, k*3);
+        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, k*4);
+        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, k*5);
+        testHnsw(queryVectors, dataVectors, G, ivfrn, graph, k, k*10);
       } else {
+        test(queryVectors, dataVectors, G, ivfrn, k);
+        test(queryVectors, dataVectors, G, ivfrn, k);
         test(queryVectors, dataVectors, G, ivfrn, k);
       }
     }
+  }
+
+  private static int[] getNN(
+    RandomAccessVectorValues.Floats reader,
+    float[] query,
+    int topK,
+    VectorSimilarityFunction vectorFunction)
+    throws IOException {
+    int[] result = new int[topK];
+    NeighborQueue queue = new NeighborQueue(topK, false);
+    for (int j = 0; j < reader.size(); j++) {
+      float[] doc = reader.vectorValue(j);
+      float dist = vectorFunction.compare(query, doc);
+      queue.insertWithOverflow(j, dist);
+    }
+    for (int k = topK - 1; k >= 0; k--) {
+      result[k] = queue.topNode();
+      queue.pop();
+    }
+    return result;
   }
 
   public static void testHnsw(
@@ -100,7 +156,7 @@ public class Search {
     int correctCount = 0;
     long totalVectorComparisons = 0;
 
-    System.out.println("Starting search");
+    System.out.println("Starting search: numCandidates=" + numCandidates);
     for (int i = 0; i < queryVectors.size(); i++) {
       long startTime = System.nanoTime();
       float[] queryVector = queryVectors.vectorValue(i);
@@ -113,15 +169,11 @@ public class Search {
       TopDocs collectedDocs = knnCollector.topDocs();
       HitQueue KNNs = new HitQueue(k, false);
       // rescore & get top k
-      if (numCandidates > k) {
-        for (int j = 0; j < collectedDocs.scoreDocs.length; j++) {
-          float rawScore =
-              VectorSimilarityFunction.EUCLIDEAN.compare(
-                  dataVectors.vectorValue(collectedDocs.scoreDocs[j].doc), queryVector);
-          KNNs.insertWithOverflow(new ScoreDoc(collectedDocs.scoreDocs[j].doc, rawScore));
-        }
-      } else {
-        KNNs.addAll(Arrays.asList(knnCollector.topDocs().scoreDocs));
+      for (int j = 0; j < collectedDocs.scoreDocs.length; j++) {
+        float rawScore =
+            VectorSimilarityFunction.EUCLIDEAN.compare(
+                dataVectors.vectorValue(collectedDocs.scoreDocs[j].doc), queryVector);
+        KNNs.insertWithOverflow(new ScoreDoc(collectedDocs.scoreDocs[j].doc, rawScore));
       }
       float usertime =
           (System.nanoTime() - startTime)
@@ -152,6 +204,7 @@ public class Search {
     float avgVectorComparisons = (float) totalVectorComparisons / queryVectors.size();
 
     System.out.println("------------------------------------------------");
+    System.out.println("numCandidates = " + numCandidates + "\tk = " + k + "\tCoarse Clusters = " + ivf.getC());
     System.out.println("Recall = " + recall * 100f + "%\t" + "Ratio = " + averageRatio);
     System.out.println(
         "Avg Time Per Search = "
@@ -187,7 +240,7 @@ public class Search {
     for (int i = 0; i < queryVectors.size(); i++) {
       long startTime = System.nanoTime();
       float[] queryVector = queryVectors.vectorValue(i);
-      IVFRNResult result = ivf.search(dataVectors, queryVector, k, nprobes);
+      IVFRNResult result = ivf.search(dataVectors, queryVector, k, 5, nprobes);
       PriorityQueue<Result> KNNs = result.results();
       IVFRNStats stats = result.stats();
       float usertime =

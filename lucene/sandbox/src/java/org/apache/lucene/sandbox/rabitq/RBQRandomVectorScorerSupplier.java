@@ -32,8 +32,58 @@ public class RBQRandomVectorScorerSupplier implements RandomVectorScorerSupplier
   }
 
   @Override
+  public RandomVectorScorer scoreEstimator(int ord) throws IOException {
+    byte[] vectorBits = quantizedVectorValues.binaryCode[ord];
+    Factor vectorFactor = quantizedVectorValues.fac[ord];
+    return new RBQEstimatorVectorScorer(vectorBits, vectorFactor, rawVectorValues2, quantizedVectorValues);
+  }
+
+  @Override
   public RandomVectorScorerSupplier copy() throws IOException {
     return new RBQRandomVectorScorerSupplier(rawVectorValues, quantizedVectorValues);
+  }
+
+  public static class RBQEstimatorVectorScorer extends RandomVectorScorer.AbstractRandomVectorScorer {
+    // TODO do we ever need to rerank?
+    private final byte[] vectorBits;
+    private final Factor vectorFactor;
+    private final IVFRN quantizedVectorValues;
+
+    /**
+     * Creates a new scorer for the given vector values.
+     *
+     * @param values the vector values
+     */
+    public RBQEstimatorVectorScorer(
+        byte[] vectorBits,
+        Factor vectorFactor,
+        RandomAccessVectorValues values,
+        IVFRN quantizedVectorValues) {
+      super(values);
+      this.vectorBits = vectorBits;
+      this.vectorFactor = vectorFactor;
+      this.quantizedVectorValues = quantizedVectorValues;
+    }
+
+    @Override
+    public float score(int node) throws IOException {
+      float comparison = quantizeCompare(node);
+      // Flip so biggest value is closest
+      return 1 / (1f + comparison);
+    }
+
+    private float quantizeCompare(int nodeId) {
+      byte[] binaryCode = quantizedVectorValues.binaryCode[nodeId];
+      long qcDist = SpaceUtils.bitAnd(vectorBits, binaryCode);
+
+      float tmpDist = quantizedVectorValues.fac[nodeId].sqrX()
+          + vectorFactor.sqrX()
+          + quantizedVectorValues.fac[nodeId].factorPPC()
+          + qcDist * quantizedVectorValues.fac[nodeId].factorIP();
+      float errorBound = (float)Math.sqrt(vectorFactor.sqrX()) * quantizedVectorValues.fac[nodeId].error();
+      float estimator = tmpDist - errorBound;
+      return estimator;
+    }
   }
 
   public static class RBQRandomVectorScorer extends RandomVectorScorer.AbstractRandomVectorScorer {

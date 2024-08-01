@@ -13,24 +13,22 @@ import java.util.Random;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 public class IVFRN {
-  private Factor[] fac;
+  Factor[] fac;
 
-  private int N; // the number of data vectors
-  private int C; // the number of clusters
+  int N; // the number of data vectors
+  int C; // the number of clusters
 
-  private int[] start; // the start point of a cluster
-  private int[] len; // the length of a cluster
-  private int[] id; // N of size_t the ids of the objects in a cluster
-  private float[] distToC; // N of floats distance to the centroids (not the squared distance)
-  private float[] u; // B of floats random numbers sampled from the uniform distribution [0,1]
+  int[] start; // the start point of a cluster
+  int[] len; // the length of a cluster
+  int[] id; // N of size_t the ids of the objects in a cluster
+  float[] distToC; // N of floats distance to the centroids (not the squared distance)
+  float[] u; // B of floats random numbers sampled from the uniform distribution [0,1]
 
-  // FIXME: FUTURE - make this a byte[] instead??
-  private byte[][] binaryCode; // (B / 8) * N of 64-bit uint64_t
+  byte[][] binaryCode; // (B / 8) * N of 64-bit uint64_t
 
-  private float[] x0; // N of floats in the Random Net algorithm
-  private float[][]
-      centroids; // N * B floats (not N * D), note that the centroids should be randomized
-  private int[] dataMapping;
+  float[] x0; // N of floats in the Random Net algorithm
+  float[][] centroids; // N * B floats (not N * D), note that the centroids should be randomized
+  int[] dataMapping;
 
   private final int B;
   private final int D;
@@ -317,7 +315,7 @@ public class IVFRN {
       byte[] byteQuery = quantResult.result();
       int sumQ = quantResult.sumQ();
 
-      byte[] quantQuery = SpaceUtils.transposeBin(byteQuery, D);
+      byte[] quantQuery = SpaceUtils.transposeBinPan(byteQuery, D);
       quantizedQueries[c] = new QuantizedQuery(quantQuery, sumQ, sqrY, vl, width, c);
     }
     return quantizedQueries;
@@ -342,11 +340,13 @@ public class IVFRN {
             + sqrY
             + fac[nodeId].factorPPC() * vl
             + (qcDist * 2 - sumQ) * fac[nodeId].factorIP() * width;
-    return tmpDist;
+    float errorBound = sqrY * sqrY * (fac[nodeId].error());
+    float estimator = tmpDist - errorBound;
+    return estimator;
   }
 
   public IVFRNResult search(
-      RandomAccessVectorValues.Floats dataVectors, float[] query, int k, int nProbe)
+      RandomAccessVectorValues.Floats dataVectors, float[] query, int k, float oversample, int nProbe)
       throws IOException {
     // FIXME: FUTURE - implement fast scan and do a comparison
 
@@ -367,7 +367,7 @@ public class IVFRN {
 
     // FIXME: FUTURE - don't use the Result class for this; it's confusing
     // FIXME: FUTURE - hardcoded
-    int maxEstimatorSize = 500;
+    int maxEstimatorSize = (int)(oversample * k);
     PriorityQueue<Result> estimatorDistances =
         new PriorityQueue<>(maxEstimatorSize, Comparator.reverseOrder());
 
@@ -393,7 +393,7 @@ public class IVFRN {
       int sumQ = quantResult.sumQ();
 
       // Binary String Representation
-      byte[] quantQuery = SpaceUtils.transposeBin(byteQuery, D);
+      byte[] quantQuery = SpaceUtils.transposeBinPan(byteQuery, D);
 
       int startC = start[c];
       float y = (float) Math.sqrt(sqrY);
@@ -401,7 +401,7 @@ public class IVFRN {
       int facCounter = startC;
       int bCounter = startC;
 
-      for (int i = 0; i < len[c]; i++) {
+      for (int i = 0; i < dataVectors.size(); i++) {
         long qcDist = SpaceUtils.ipByteBinBytePan(quantQuery, binaryCode[bCounter]);
 
         float tmpDist =
