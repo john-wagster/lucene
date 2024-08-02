@@ -70,9 +70,7 @@ public final class VectorUtil {
    * Returns the cosine similarity between the two vectors.
    *
    * @throws IllegalArgumentException if the vectors' dimensions differ.
-   * @deprecated use dot-product instead using normalized vectors
    */
-  @Deprecated
   public static float cosine(float[] a, float[] b) {
     if (a.length != b.length) {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length + "!=" + b.length);
@@ -82,12 +80,7 @@ public final class VectorUtil {
     return r;
   }
 
-  /**
-   * Returns the cosine similarity between the two vectors.
-   *
-   * @deprecated use dot-product instead using normalized vectors
-   */
-  @Deprecated
+  /** Returns the cosine similarity between the two vectors. */
   public static float cosine(byte[] a, byte[] b) {
     if (a.length != b.length) {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length + "!=" + b.length);
@@ -213,6 +206,14 @@ public final class VectorUtil {
   }
 
   /**
+   * For xorBitCount we stride over the values as either 64-bits (long) or 32-bits (int) at a time.
+   * On ARM Long::bitCount is not vectorized, and therefore produces less than optimal code, when
+   * compared to Integer::bitCount. While Long::bitCount is optimal on x64. See
+   * https://bugs.openjdk.org/browse/JDK-8336000
+   */
+  static final boolean XOR_BIT_COUNT_STRIDE_AS_INT = Constants.OS_ARCH.equals("aarch64");
+
+  /**
    * XOR bit count computed over signed bytes.
    *
    * @param a bytes containing a vector
@@ -223,8 +224,32 @@ public final class VectorUtil {
     if (a.length != b.length) {
       throw new IllegalArgumentException("vector dimensions differ: " + a.length + "!=" + b.length);
     }
+    if (XOR_BIT_COUNT_STRIDE_AS_INT) {
+      return xorBitCountInt(a, b);
+    } else {
+      return xorBitCountLong(a, b);
+    }
+  }
+
+  /** XOR bit count striding over 4 bytes at a time. */
+  static int xorBitCountInt(byte[] a, byte[] b) {
     int distance = 0, i = 0;
-    for (final int upperBound = a.length & ~(Long.BYTES - 1); i < upperBound; i += Long.BYTES) {
+    for (final int upperBound = a.length & -Integer.BYTES; i < upperBound; i += Integer.BYTES) {
+      distance +=
+          Integer.bitCount(
+              (int) BitUtil.VH_NATIVE_INT.get(a, i) ^ (int) BitUtil.VH_NATIVE_INT.get(b, i));
+    }
+    // tail:
+    for (; i < a.length; i++) {
+      distance += Integer.bitCount((a[i] ^ b[i]) & 0xFF);
+    }
+    return distance;
+  }
+
+  /** XOR bit count striding over 8 bytes at a time. */
+  static int xorBitCountLong(byte[] a, byte[] b) {
+    int distance = 0, i = 0;
+    for (final int upperBound = a.length & -Long.BYTES; i < upperBound; i += Long.BYTES) {
       distance +=
           Long.bitCount(
               (long) BitUtil.VH_NATIVE_LONG.get(a, i) ^ (long) BitUtil.VH_NATIVE_LONG.get(b, i));
