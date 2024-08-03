@@ -237,7 +237,7 @@ public class NeighborArray {
    */
   private int findWorstNonDiverse(int nodeOrd, RandomVectorScorerSupplier scorerSupplier)
       throws IOException {
-    RandomVectorScorer scorer = scorerSupplier.scoreEstimator(nodeOrd);
+    RandomVectorScorer scorer = scorerSupplier.scorer(nodeOrd);
     int[] uncheckedIndexes = sort(scorer);
     assert uncheckedIndexes != null : "We will always have something unchecked";
     int uncheckedCursor = uncheckedIndexes.length - 1;
@@ -263,7 +263,7 @@ public class NeighborArray {
       RandomVectorScorerSupplier scorerSupplier)
       throws IOException {
     float minAcceptedSimilarity = scores[candidateIndex];
-    RandomVectorScorer scorer = scorerSupplier.scoreEstimator(nodes[candidateIndex]);
+    RandomVectorScorer scorer = scorerSupplier.scorer(nodes[candidateIndex]);
     if (candidateIndex == uncheckedIndexes[uncheckedCursor]) {
       // the candidate itself is unchecked
       for (int i = candidateIndex - 1; i >= 0; i--) {

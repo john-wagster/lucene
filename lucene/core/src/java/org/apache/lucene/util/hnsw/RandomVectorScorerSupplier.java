@@ -30,10 +30,6 @@ public interface RandomVectorScorerSupplier {
    */
   RandomVectorScorer scorer(int ord) throws IOException;
 
-  default RandomVectorScorer scoreEstimator(int ord) throws IOException {
-    return scorer(ord);
-  }
-
   /**
    * Make a copy of the supplier, which will copy the underlying vectorValues so the copy is safe to
    * be used in other threads.

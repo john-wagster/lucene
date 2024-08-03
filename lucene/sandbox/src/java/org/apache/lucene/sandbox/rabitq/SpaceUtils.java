@@ -1,13 +1,10 @@
 package org.apache.lucene.sandbox.rabitq;
 
-import java.nio.ByteBuffer;
 import java.util.BitSet;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.ShortVector;
-import jdk.incubator.vector.VectorMask;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
-import org.apache.lucene.index.ByteVectorValues;
 import org.apache.lucene.util.BitUtil;
 
 public class SpaceUtils {
@@ -64,6 +61,48 @@ public class SpaceUtils {
     return ret;
   }
 
+  public static long ipByteBinBytePanbq2(byte[] q, byte[] d) {
+    long ret = 0;
+    long subRet0 = 0;
+    long subRet1 = 0;
+
+    // TODO This is best for ARM, need to test on 256 & 512
+    final int limit = BYTE_128_SPECIES.loopBound(d.length);
+    // iterate in chunks of 256 bytes to ensure we don't overflow the accumulator
+    // (256bytes/16lanes=16itrs)
+    for (int j = 0; j < limit; j += 256) {
+      ByteVector acc0 = ByteVector.zero(BYTE_128_SPECIES);
+      ByteVector acc1 = ByteVector.zero(BYTE_128_SPECIES);
+      int innerLimit = Math.min(limit - j, 256);
+      for (int k = 0; k < innerLimit; k += BYTE_128_SPECIES.length()) {
+        ByteVector vd = ByteVector.fromArray(BYTE_128_SPECIES, d, j + k);
+        ByteVector vq0 = ByteVector.fromArray(BYTE_128_SPECIES, q, j + k);
+        ByteVector vq1 = ByteVector.fromArray(BYTE_128_SPECIES, q, j + k + d.length);
+        ByteVector vres0 = vq0.and(vd);
+        ByteVector vres1 = vq1.and(vd);
+        vres0 = vres0.lanewise(VectorOperators.BIT_COUNT);
+        vres1 = vres1.lanewise(VectorOperators.BIT_COUNT);
+        acc0 = acc0.add(vres0);
+        acc1 = acc1.add(vres1);
+      }
+      ShortVector sumShort1 = acc0.reinterpretAsShorts().and((short) 0xFF);
+      ShortVector sumShort2 = acc0.reinterpretAsShorts().lanewise(VectorOperators.LSHR, 8);
+      subRet0 += sumShort1.add(sumShort2).reduceLanes(VectorOperators.ADD);
+
+      sumShort1 = acc1.reinterpretAsShorts().and((short) 0xFF);
+      sumShort2 = acc1.reinterpretAsShorts().lanewise(VectorOperators.LSHR, 8);
+      subRet1 += sumShort1.add(sumShort2).reduceLanes(VectorOperators.ADD);
+    }
+    // tail as bytes
+    for (int r = limit; r < d.length; r++) {
+      subRet0 += Integer.bitCount((q[r] & d[r]) & 0xFF);
+      subRet1 += Integer.bitCount((q[r + d.length] & d[r]) & 0xFF);
+    }
+    ret += subRet0;
+    ret += subRet1 << 1;
+    return ret;
+  }
+
   public static long ipByteBinBytePan(byte[] q, byte[] d) {
     long ret = 0;
     long subRet0 = 0;
@@ -73,8 +112,9 @@ public class SpaceUtils {
 
     // TODO This is best for ARM, need to test on 256 & 512
     final int limit = BYTE_128_SPECIES.loopBound(d.length);
-    // iterate in chunks of 256 bytes to ensure we don't overflow the accumulator (256bytes/16lanes=16itrs)
-    for (int j =0; j < limit; j += 256) {
+    // iterate in chunks of 256 bytes to ensure we don't overflow the accumulator
+    // (256bytes/16lanes=16itrs)
+    for (int j = 0; j < limit; j += 256) {
       ByteVector acc0 = ByteVector.zero(BYTE_128_SPECIES);
       ByteVector acc1 = ByteVector.zero(BYTE_128_SPECIES);
       ByteVector acc2 = ByteVector.zero(BYTE_128_SPECIES);
@@ -147,8 +187,12 @@ public class SpaceUtils {
 
       ByteVector v0 = q0.lanewise(VectorOperators.LSHL, 8 - B_QUERY);
       ByteVector v1 = q1.lanewise(VectorOperators.LSHL, 8 - B_QUERY);
-      v0 = v0.lanewise(VectorOperators.OR, q0.lanewise(VectorOperators.LSHR, B_QUERY).and(BYTE_MASK));
-      v1 = v1.lanewise(VectorOperators.OR, q1.lanewise(VectorOperators.LSHR, B_QUERY).and(BYTE_MASK));
+      v0 =
+          v0.lanewise(
+              VectorOperators.OR, q0.lanewise(VectorOperators.LSHR, B_QUERY).and(BYTE_MASK));
+      v1 =
+          v1.lanewise(
+              VectorOperators.OR, q1.lanewise(VectorOperators.LSHR, B_QUERY).and(BYTE_MASK));
 
       for (int j = 0; j < B_QUERY; j++) {
         v0.intoArray(v, 0);
@@ -161,6 +205,49 @@ public class SpaceUtils {
 
         v0 = v0.lanewise(VectorOperators.ADD, v0);
         v1 = v1.lanewise(VectorOperators.ADD, v1);
+      }
+      qOffset += 32;
+    }
+    return quantQueryByte;
+  }
+
+  public static byte[] transposeBinQ2(byte[] q, int D) {
+    int B = (D + 63) / 64 * 64;
+    byte[] quantQueryByte = new byte[2 * B / 8];
+    int byte_mask = 1;
+    for (int i = 0; i < 2 - 1; i++) {
+      byte_mask = byte_mask << 1 | 0b00000001;
+    }
+    int qOffset = 0;
+    final byte[] v1 = new byte[4];
+    final byte[] v = new byte[32];
+    for (int i = 0; i < B; i += 32) {
+      // for every four bytes we shift left (with remainder across those bytes)
+      int shift = 8 - 2;
+      for (int j = 0; j < v.length; j += 4) {
+        v[j] = (byte) (q[qOffset + j] << shift | ((q[qOffset + j] >>> (8 - shift)) & byte_mask));
+        v[j + 1] =
+            (byte)
+                (q[qOffset + j + 1] << shift | ((q[qOffset + j + 1] >>> (8 - shift)) & byte_mask));
+        v[j + 2] =
+            (byte)
+                (q[qOffset + j + 2] << shift | ((q[qOffset + j + 2] >>> (8 - shift)) & byte_mask));
+        v[j + 3] =
+            (byte)
+                (q[qOffset + j + 3] << shift | ((q[qOffset + j + 3] >>> (8 - shift)) & byte_mask));
+      }
+      for (int j = 0; j < 2; j++) {
+        moveMaskEpi8Byte(v, v1);
+        for (int k = 0; k < 4; k++) {
+          quantQueryByte[(2 - j - 1) * (B / 8) + i / 8 + k] = v1[k];
+          v1[k] = 0;
+        }
+        for (int k = 0; k < v.length; k += 4) {
+          v[k] = (byte) (v[k] + v[k]);
+          v[k + 1] = (byte) (v[k + 1] + v[k + 1]);
+          v[k + 2] = (byte) (v[k + 2] + v[k + 2]);
+          v[k + 3] = (byte) (v[k + 3] + v[k + 3]);
+        }
       }
       qOffset += 32;
     }
@@ -183,9 +270,15 @@ public class SpaceUtils {
       int shift = 8 - B_QUERY;
       for (int j = 0; j < v.length; j += 4) {
         v[j] = (byte) (q[qOffset + j] << shift | ((q[qOffset + j] >>> (8 - shift)) & byte_mask));
-        v[j + 1] = (byte) (q[qOffset + j + 1] << shift | ((q[qOffset + j + 1] >>> (8 - shift)) & byte_mask));
-        v[j + 2] = (byte) (q[qOffset + j + 2] << shift | ((q[qOffset + j + 2] >>> (8 - shift)) & byte_mask));
-        v[j + 3] = (byte) (q[qOffset + j + 3] << shift | ((q[qOffset + j + 3] >>> (8 - shift)) & byte_mask));
+        v[j + 1] =
+            (byte)
+                (q[qOffset + j + 1] << shift | ((q[qOffset + j + 1] >>> (8 - shift)) & byte_mask));
+        v[j + 2] =
+            (byte)
+                (q[qOffset + j + 2] << shift | ((q[qOffset + j + 2] >>> (8 - shift)) & byte_mask));
+        v[j + 3] =
+            (byte)
+                (q[qOffset + j + 3] << shift | ((q[qOffset + j + 3] >>> (8 - shift)) & byte_mask));
       }
       for (int j = 0; j < B_QUERY; j++) {
         moveMaskEpi8Byte(v, v1);
@@ -195,9 +288,9 @@ public class SpaceUtils {
         }
         for (int k = 0; k < v.length; k += 4) {
           v[k] = (byte) (v[k] + v[k]);
-          v[k+1] = (byte) (v[k+1] + v[k+1]);
-          v[k+2] = (byte) (v[k+2] + v[k+2]);
-          v[k+3] = (byte) (v[k+3] + v[k+3]);
+          v[k + 1] = (byte) (v[k + 1] + v[k + 1]);
+          v[k + 2] = (byte) (v[k + 2] + v[k + 2]);
+          v[k + 3] = (byte) (v[k + 3] + v[k + 3]);
         }
       }
       qOffset += 32;

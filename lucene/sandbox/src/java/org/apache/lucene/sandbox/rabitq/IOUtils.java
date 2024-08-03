@@ -1,9 +1,5 @@
 package org.apache.lucene.sandbox.rabitq;
 
-import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexInput;
-
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -12,6 +8,9 @@ import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.IOContext;
+import org.apache.lucene.store.IndexInput;
 
 public class IOUtils {
 
@@ -100,14 +99,14 @@ public class IOUtils {
   }
 
   public static int[][] readGroundTruth(
-    String groundTruthFile, FSDirectory directory, int numQueries) throws IOException {
+      String groundTruthFile, FSDirectory directory, int numQueries) throws IOException {
     if (!Files.exists(directory.getDirectory().resolve(groundTruthFile))) {
       return null;
     }
     int[][] groundTruths = new int[numQueries][];
     // reading the ground truths from the file
     try (IndexInput queryGroundTruthInput =
-           directory.openInput(groundTruthFile, IOContext.DEFAULT)) {
+        directory.openInput(groundTruthFile, IOContext.DEFAULT)) {
       for (int i = 0; i < numQueries; i++) {
         int length = queryGroundTruthInput.readInt();
         groundTruths[i] = new int[length];

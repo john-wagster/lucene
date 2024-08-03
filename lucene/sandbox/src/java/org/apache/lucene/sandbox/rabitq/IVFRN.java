@@ -10,6 +10,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 import java.util.Random;
+import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 public class IVFRN {
@@ -289,7 +291,25 @@ public class IVFRN {
   }
 
   record QuantizedQuery(
-      byte[] result, int sumQ, float centroidDist, float vl, float width, int centroidId) {}
+      byte[] result, int sumQ, float centroidDist, float vl, float width, int centroidId) {
+    static QuantizedQuery readFrom(IndexInput input, int dims, int centroidId) throws IOException {
+      byte[] result = new byte[dims];
+      input.readBytes(result, 0, dims);
+      int sumQ = input.readInt();
+      float centroidDist = Float.intBitsToFloat(input.readInt());
+      float vl = Float.intBitsToFloat(input.readInt());
+      float width = Float.intBitsToFloat(input.readInt());
+      return new QuantizedQuery(result, sumQ, centroidDist, vl, width, centroidId);
+    }
+
+    void writeTo(IndexOutput output) throws IOException {
+      output.writeBytes(result, 0, result.length);
+      output.writeInt(sumQ);
+      output.writeInt(Float.floatToIntBits(centroidDist));
+      output.writeInt(Float.floatToIntBits(vl));
+      output.writeInt(Float.floatToIntBits(width));
+    }
+  }
 
   public int getCentroidId(int vectorNodeId) {
     int centroidPos = Arrays.binarySearch(start, vectorNodeId);
@@ -299,6 +319,26 @@ public class IVFRN {
     assert centroidPos < 0;
     // Flip the sign and subtract 2 to get the centroid id
     return -centroidPos - 2;
+  }
+
+  public QuantizedQuery[] quantizeQuery2(float[] query) {
+    QuantizedQuery[] quantizedQueries = new QuantizedQuery[C];
+    for (int c = 0; c < C; c++) {
+      float sqrY = VectorUtils.squareDistance(query, centroids[c]);
+
+      // Preprocess the residual query and the quantized query
+      float[] v = SpaceUtils.range(query, centroids[c]);
+      float vl = v[0], vr = v[1];
+      float width = (vr - vl) / ((1 << 2) - 1);
+
+      QuantResult quantResult = SpaceUtils.quantize(query, centroids[c], u, vl, width);
+      byte[] byteQuery = quantResult.result();
+      int sumQ = quantResult.sumQ();
+
+      byte[] quantQuery = SpaceUtils.transposeBinQ2(byteQuery, D);
+      quantizedQueries[c] = new QuantizedQuery(quantQuery, sumQ, sqrY, vl, width, c);
+    }
+    return quantizedQueries;
   }
 
   public QuantizedQuery[] quantizeQuery(float[] query) {
@@ -319,6 +359,30 @@ public class IVFRN {
       quantizedQueries[c] = new QuantizedQuery(quantQuery, sumQ, sqrY, vl, width, c);
     }
     return quantizedQueries;
+  }
+
+  public float quantizeCompareB2(QuantizedQuery quantizedQuery, int nodeId) {
+    int c = quantizedQuery.centroidId();
+    float sqrY = quantizedQuery.centroidDist();
+    float vl = quantizedQuery.vl();
+    float width = quantizedQuery.width();
+    byte[] quantQuery = quantizedQuery.result();
+    int sumQ = quantizedQuery.sumQ();
+
+    int startC = start[c];
+    assert nodeId >= startC && nodeId < startC + len[c];
+
+    float tmpDist = 0;
+    long qcDist = SpaceUtils.ipByteBinBytePanbq2(quantQuery, binaryCode[nodeId]);
+
+    tmpDist +=
+        fac[nodeId].sqrX()
+            + sqrY
+            + fac[nodeId].factorPPC() * vl
+            + (qcDist * 2 - sumQ) * fac[nodeId].factorIP() * width;
+    float errorBound = sqrY * sqrY * (fac[nodeId].error());
+    float estimator = tmpDist - errorBound;
+    return estimator;
   }
 
   public float quantizeCompare(QuantizedQuery quantizedQuery, int nodeId) {
@@ -346,7 +410,11 @@ public class IVFRN {
   }
 
   public IVFRNResult search(
-      RandomAccessVectorValues.Floats dataVectors, float[] query, int k, float oversample, int nProbe)
+      RandomAccessVectorValues.Floats dataVectors,
+      float[] query,
+      int k,
+      float oversample,
+      int nProbe)
       throws IOException {
     // FIXME: FUTURE - implement fast scan and do a comparison
 
@@ -367,7 +435,7 @@ public class IVFRN {
 
     // FIXME: FUTURE - don't use the Result class for this; it's confusing
     // FIXME: FUTURE - hardcoded
-    int maxEstimatorSize = (int)(oversample * k);
+    int maxEstimatorSize = (int) (oversample * k);
     PriorityQueue<Result> estimatorDistances =
         new PriorityQueue<>(maxEstimatorSize, Comparator.reverseOrder());
 

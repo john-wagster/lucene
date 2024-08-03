@@ -9,8 +9,7 @@ public class RBQRandomVectorScorerSupplier implements RandomVectorScorerSupplier
 
   private final RandomAccessVectorValues.Floats rawVectorValues;
   private final RandomAccessVectorValues.Floats rawVectorValues1;
-  private final RandomAccessVectorValues.Floats rawVectorValues2;
-  // Right now, these are on heap
+  // Right now, these are on heap, but should be off heap, eventually
   private final IVFRN quantizedVectorValues;
 
   public RBQRandomVectorScorerSupplier(
@@ -18,7 +17,6 @@ public class RBQRandomVectorScorerSupplier implements RandomVectorScorerSupplier
       throws IOException {
     this.rawVectorValues = rawVectorValues;
     this.rawVectorValues1 = rawVectorValues.copy();
-    this.rawVectorValues2 = rawVectorValues.copy();
     this.quantizedVectorValues = quantizedVectorValues;
   }
 
@@ -27,15 +25,7 @@ public class RBQRandomVectorScorerSupplier implements RandomVectorScorerSupplier
     float[] vector = rawVectorValues1.vectorValue(ord);
 
     IVFRN.QuantizedQuery[] quantizedQuery = quantizedVectorValues.quantizeQuery(vector);
-    return new RBQRandomVectorScorer(
-        vector, quantizedQuery, rawVectorValues2, quantizedVectorValues);
-  }
-
-  @Override
-  public RandomVectorScorer scoreEstimator(int ord) throws IOException {
-    byte[] vectorBits = quantizedVectorValues.binaryCode[ord];
-    Factor vectorFactor = quantizedVectorValues.fac[ord];
-    return new RBQEstimatorVectorScorer(vectorBits, vectorFactor, rawVectorValues2, quantizedVectorValues);
+    return new RBQRandomVectorScorer(quantizedQuery, rawVectorValues, quantizedVectorValues);
   }
 
   @Override
@@ -43,52 +33,7 @@ public class RBQRandomVectorScorerSupplier implements RandomVectorScorerSupplier
     return new RBQRandomVectorScorerSupplier(rawVectorValues, quantizedVectorValues);
   }
 
-  public static class RBQEstimatorVectorScorer extends RandomVectorScorer.AbstractRandomVectorScorer {
-    // TODO do we ever need to rerank?
-    private final byte[] vectorBits;
-    private final Factor vectorFactor;
-    private final IVFRN quantizedVectorValues;
-
-    /**
-     * Creates a new scorer for the given vector values.
-     *
-     * @param values the vector values
-     */
-    public RBQEstimatorVectorScorer(
-        byte[] vectorBits,
-        Factor vectorFactor,
-        RandomAccessVectorValues values,
-        IVFRN quantizedVectorValues) {
-      super(values);
-      this.vectorBits = vectorBits;
-      this.vectorFactor = vectorFactor;
-      this.quantizedVectorValues = quantizedVectorValues;
-    }
-
-    @Override
-    public float score(int node) throws IOException {
-      float comparison = quantizeCompare(node);
-      // Flip so biggest value is closest
-      return 1 / (1f + comparison);
-    }
-
-    private float quantizeCompare(int nodeId) {
-      byte[] binaryCode = quantizedVectorValues.binaryCode[nodeId];
-      long qcDist = SpaceUtils.bitAnd(vectorBits, binaryCode);
-
-      float tmpDist = quantizedVectorValues.fac[nodeId].sqrX()
-          + vectorFactor.sqrX()
-          + quantizedVectorValues.fac[nodeId].factorPPC()
-          + qcDist * quantizedVectorValues.fac[nodeId].factorIP();
-      float errorBound = (float)Math.sqrt(vectorFactor.sqrX()) * quantizedVectorValues.fac[nodeId].error();
-      float estimator = tmpDist - errorBound;
-      return estimator;
-    }
-  }
-
   public static class RBQRandomVectorScorer extends RandomVectorScorer.AbstractRandomVectorScorer {
-    // TODO do we ever need to rerank?
-    private final float[] queryVector;
     private final IVFRN.QuantizedQuery[] quantizedQuery;
     private final IVFRN quantizedVectorValues;
 
@@ -98,12 +43,10 @@ public class RBQRandomVectorScorerSupplier implements RandomVectorScorerSupplier
      * @param values the vector values
      */
     public RBQRandomVectorScorer(
-        float[] queryVector,
         IVFRN.QuantizedQuery[] quantizedQuery,
         RandomAccessVectorValues values,
         IVFRN quantizedVectorValues) {
       super(values);
-      this.queryVector = queryVector;
       this.quantizedQuery = quantizedQuery;
       this.quantizedVectorValues = quantizedVectorValues;
     }

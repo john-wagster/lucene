@@ -12,15 +12,17 @@ public class VectorsReaderWithOffset implements RandomAccessVectorValues.Floats 
   private final int byteSize;
   private int lastOrd = -1;
   private final float[] value;
+  private final int offset;
 
-  public VectorsReaderWithOffset(IndexInput slice, int size, int dim) {
+  public VectorsReaderWithOffset(IndexInput slice, int size, int dim, int offset) {
     this.slice = slice;
     this.size = size;
     this.dim = dim;
     // We assume that the start of ever vector entry includes an integer/float that indicates its
     // dimension count
-    this.byteSize = Float.BYTES * dim + Float.BYTES;
+    this.byteSize = Float.BYTES * dim + offset;
     value = new float[dim];
+    this.offset = offset;
   }
 
   @Override
@@ -60,7 +62,7 @@ public class VectorsReaderWithOffset implements RandomAccessVectorValues.Floats 
     }
     // Get to the appropriate vector for the ordinal, then skip the first 4 bytes storing its
     // dimension count
-    long seekPos = (long) targetOrd * byteSize + Float.BYTES;
+    long seekPos = (long) targetOrd * byteSize + offset;
     slice.seek(seekPos);
     slice.readFloats(value, 0, value.length);
     lastOrd = targetOrd;
@@ -69,6 +71,6 @@ public class VectorsReaderWithOffset implements RandomAccessVectorValues.Floats 
 
   @Override
   public Floats copy() throws IOException {
-    return new VectorsReaderWithOffset(slice, size, dim);
+    return new VectorsReaderWithOffset(slice, size, dim, offset);
   }
 }

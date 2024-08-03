@@ -18,7 +18,7 @@ public class SamplingIVF {
     // FIXME: FUTURE do error checking ... has to be at least as many vectors as centroids for now
 
     int vectorsLength = vectors.size();
-    SampleReader sampleReader = SampleReader.createSampleReader(vectors, vectorsLength / 10, seed);
+    SampleReader sampleReader = SampleReader.createSampleReader(vectors, vectorsLength / 90, seed);
     KMeans kMeans = new KMeans(sampleReader, totalClusters, seed);
     float[][] centroids = kMeans.computeCentroids(5, 10, f -> {});
 
