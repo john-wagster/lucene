@@ -63,8 +63,10 @@ public class HnswGraphBuilder implements HnswBuilder {
       beamCandidates; // for levels of graph where we add the node
 
   protected final OnHeapHnswGraph hnsw;
+  protected final HnswLock hnswLock;
 
   private InfoStream infoStream = InfoStream.getDefault();
+  private boolean frozen;
 
   public static HnswGraphBuilder create(
       RandomVectorScorerSupplier scorerSupplier, int M, int beamWidth, long seed)
@@ -109,6 +111,7 @@ public class HnswGraphBuilder implements HnswBuilder {
         beamWidth,
         seed,
         hnsw,
+        null,
         new HnswGraphSearcher(new NeighborQueue(beamWidth, true), new FixedBitSet(hnsw.size())));
   }
 
@@ -130,6 +133,7 @@ public class HnswGraphBuilder implements HnswBuilder {
       int beamWidth,
       long seed,
       OnHeapHnswGraph hnsw,
+      HnswLock hnswLock,
       HnswGraphSearcher graphSearcher)
       throws IOException {
     if (M <= 0) {
@@ -145,6 +149,7 @@ public class HnswGraphBuilder implements HnswBuilder {
     this.ml = M == 1 ? 1 : 1 / Math.log(1.0 * M);
     this.random = new SplittableRandom(seed);
     this.hnsw = hnsw;
+    this.hnswLock = hnswLock;
     this.graphSearcher = graphSearcher;
     entryCandidates = new GraphBuilderKnnCollector(1);
     beamCandidates = new GraphBuilderKnnCollector(beamWidth);
@@ -152,16 +157,25 @@ public class HnswGraphBuilder implements HnswBuilder {
 
   @Override
   public OnHeapHnswGraph build(int maxOrd) throws IOException {
+    if (frozen) {
+      throw new IllegalStateException("This HnswGraphBuilder is frozen and cannot be updated");
+    }
     if (infoStream.isEnabled(HNSW_COMPONENT)) {
       infoStream.message(HNSW_COMPONENT, "build graph from " + maxOrd + " vectors");
     }
     addVectors(maxOrd);
-    return hnsw;
+    return getCompletedGraph();
   }
 
   @Override
   public void setInfoStream(InfoStream infoStream) {
     this.infoStream = infoStream;
+  }
+
+  @Override
+  public OnHeapHnswGraph getCompletedGraph() {
+    frozen = true;
+    return getGraph();
   }
 
   @Override
@@ -171,6 +185,9 @@ public class HnswGraphBuilder implements HnswBuilder {
 
   /** add vectors in range [minOrd, maxOrd) */
   protected void addVectors(int minOrd, int maxOrd) throws IOException {
+    if (frozen) {
+      throw new IllegalStateException("This HnswGraphBuilder is frozen and cannot be updated");
+    }
     long start = System.nanoTime(), t = start;
     if (infoStream.isEnabled(HNSW_COMPONENT)) {
       infoStream.message(HNSW_COMPONENT, "addVectors [" + minOrd + " " + maxOrd + ")");
@@ -207,6 +224,9 @@ public class HnswGraphBuilder implements HnswBuilder {
        to the newly introduced levels (repeating step 2,3 for new levels) and again try to
        promote the node to entry node.
     */
+    if (frozen) {
+      throw new IllegalStateException("Graph builder is already frozen");
+    }
     RandomVectorScorer scorer = scorerSupplier.scorer(node);
     final int nodeLevel = getRandomGraphLevel(ml, random);
     // first add nodes to all levels
@@ -311,12 +331,14 @@ public class HnswGraphBuilder implements HnswBuilder {
         continue;
       }
       int nbr = candidates.nodes()[i];
-      NeighborArray nbrsOfNbr = hnsw.getNeighbors(level, nbr);
-      nbrsOfNbr.rwlock.writeLock().lock();
-      try {
+      if (hnswLock != null) {
+        try (HnswLock.LockedRow rowLock = hnswLock.write(level, nbr)) {
+          NeighborArray nbrsOfNbr = rowLock.row;
+          nbrsOfNbr.addAndEnsureDiversity(node, candidates.scores()[i], nbr, scorerSupplier);
+        }
+      } else {
+        NeighborArray nbrsOfNbr = hnsw.getNeighbors(level, nbr);
         nbrsOfNbr.addAndEnsureDiversity(node, candidates.scores()[i], nbr, scorerSupplier);
-      } finally {
-        nbrsOfNbr.rwlock.writeLock().unlock();
       }
     }
   }

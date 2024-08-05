@@ -9,8 +9,7 @@ public class RBQRandomVectorScorerSupplier implements RandomVectorScorerSupplier
 
   private final RandomAccessVectorValues.Floats rawVectorValues;
   private final RandomAccessVectorValues.Floats rawVectorValues1;
-  private final RandomAccessVectorValues.Floats rawVectorValues2;
-  // Right now, these are on heap
+  // Right now, these are on heap, but should be off heap, eventually
   private final IVFRN quantizedVectorValues;
 
   public RBQRandomVectorScorerSupplier(
@@ -18,7 +17,6 @@ public class RBQRandomVectorScorerSupplier implements RandomVectorScorerSupplier
       throws IOException {
     this.rawVectorValues = rawVectorValues;
     this.rawVectorValues1 = rawVectorValues.copy();
-    this.rawVectorValues2 = rawVectorValues.copy();
     this.quantizedVectorValues = quantizedVectorValues;
   }
 
@@ -27,8 +25,7 @@ public class RBQRandomVectorScorerSupplier implements RandomVectorScorerSupplier
     float[] vector = rawVectorValues1.vectorValue(ord);
 
     IVFRN.QuantizedQuery[] quantizedQuery = quantizedVectorValues.quantizeQuery(vector);
-    return new RBQRandomVectorScorer(
-        vector, quantizedQuery, rawVectorValues2, quantizedVectorValues);
+    return new RBQRandomVectorScorer(quantizedQuery, rawVectorValues, quantizedVectorValues);
   }
 
   @Override
@@ -37,8 +34,6 @@ public class RBQRandomVectorScorerSupplier implements RandomVectorScorerSupplier
   }
 
   public static class RBQRandomVectorScorer extends RandomVectorScorer.AbstractRandomVectorScorer {
-    // TODO do we ever need to rerank?
-    private final float[] queryVector;
     private final IVFRN.QuantizedQuery[] quantizedQuery;
     private final IVFRN quantizedVectorValues;
 
@@ -48,12 +43,10 @@ public class RBQRandomVectorScorerSupplier implements RandomVectorScorerSupplier
      * @param values the vector values
      */
     public RBQRandomVectorScorer(
-        float[] queryVector,
         IVFRN.QuantizedQuery[] quantizedQuery,
         RandomAccessVectorValues values,
         IVFRN quantizedVectorValues) {
       super(values);
-      this.queryVector = queryVector;
       this.quantizedQuery = quantizedQuery;
       this.quantizedVectorValues = quantizedVectorValues;
     }
