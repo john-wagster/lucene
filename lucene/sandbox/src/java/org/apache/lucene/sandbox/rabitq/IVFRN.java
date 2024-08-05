@@ -352,7 +352,88 @@ public class IVFRN {
     return tmpDist;
   }
 
-  public IVFRNResult search(
+  public IVFRNResult indexToIndexTest(
+          RandomAccessVectorValues.Floats dataVectors, float[] query, int k, int nProbe)
+          throws IOException {
+
+    int origin = 2176;
+    int[] neighbors = new int[] {2176, 3752, 882, 4009, 2837, 190, 3615, 816, 1045, 1884, 1, 2, 3};
+    float[] originV = Arrays.copyOf(dataVectors.vectorValue(origin), 128);
+
+    float[] trueDists = new float[len[0]];
+    float[] estDists = new float[len[0]];
+    float[] estDistsRBQ = new float[len[0]];
+
+    for(int i = 0; i < len[0]; i++) {
+//      int nextI = neighbors[i];
+      int nextI = i;
+      float[] nextV = Arrays.copyOf(dataVectors.vectorValue(nextI), 128);
+      float trueD = VectorUtil.squareDistance(originV, nextV);
+      trueDists[i] = trueD;
+
+//      float xq = nextV.length * 8f - VectorUtil.xorBitCount(binaryCode[origin], binaryCode[nextI]);
+//      float xq = nextV.length * 8f - VectorUtil.xorBitCount(binaryCode[origin], binaryCode[nextI]);
+      SpaceUtils.B_QUERY = 1;
+
+      long xq = SpaceUtils.ipByteBinBytePan(binaryCode[origin], binaryCode[nextI]);
+
+      float[] v = SpaceUtils.range(nextV, centroids[0]);
+      float vl = v[0], vr = v[1];
+      // Δ := (𝑣𝑟 − 𝑣𝑙)/(2𝐵𝑞 − 1)
+      float width = (vr - vl) / ((1 << SpaceUtils.B_QUERY) - 1);
+      float sumQ = SpaceUtils.quantize(nextV, centroids[0], u, vl, width).sumQ();
+
+
+//      (2Δ / √𝐷) * ⟨x¯𝑏, q′𝑢⟩ + (2𝑣𝑙 / √𝐷) * ∑︁𝐷𝑖=1(x¯𝑏[𝑖]) − Δ / √𝐷 * ∑︁𝐷𝑖=1(q¯𝑢 [𝑖]) − √𝐷 · 𝑣𝑙
+      float rbqEstOV = fac[nextI].sqrX() + fac[origin].sqrX() + fac[nextI].factorPPC() * vl + (xq * 2 - sumQ) * fac[nextI].factorIP() * width;
+
+      v = SpaceUtils.range(originV, centroids[0]);
+      vl = v[0];
+      vr = v[1];
+      // Δ := (𝑣𝑟 − 𝑣𝑙)/(2𝐵𝑞 − 1)
+      width = (vr - vl) / ((1 << SpaceUtils.B_QUERY) - 1);
+      sumQ = SpaceUtils.quantize(originV, centroids[0], u, vl, width).sumQ();
+
+      float rbqEstVO = fac[nextI].sqrX() + fac[origin].sqrX() + fac[origin].factorPPC() * vl + (xq * 2 - sumQ) * fac[origin].factorIP() * width;
+
+      long xor = VectorUtil.xorBitCount(binaryCode[origin], binaryCode[nextI]);
+      float estimatorBaseline = -(nextV.length * 8f - xor);
+
+      float estimator1 = (xor * 2 - nextV.length * 8f) / (nextV.length * 8f);
+      float estimator2 = fac[nextI].sqrX() + fac[origin].sqrX() + fac[origin].factorPPC() * vl + (xor-B) * fac[origin].factorIP() * width;
+      float estimator3 = fac[nextI].sqrX() + fac[origin].sqrX() + fac[origin].factorPPC() * vl + (xor*2-sumQ) * fac[origin].factorIP() * width;
+
+      float[] C = centroids[0];
+      float Cnorm = norm(C);
+
+      estDists[i] = estimatorBaseline;
+      estDistsRBQ[i] = rbqEstOV;
+
+      System.out.println("foo");
+    }
+
+    try (BufferedWriter outputWriter = new BufferedWriter(new FileWriter("voest.out"));) {
+      outputWriter.write(Arrays.toString(estDists));
+    }
+
+    try (BufferedWriter outputWriter = new BufferedWriter(new FileWriter("voestrbq.out"));) {
+      outputWriter.write(Arrays.toString(estDistsRBQ));
+    }
+
+    try (BufferedWriter outputWriter = new BufferedWriter(new FileWriter("votruth.out"));) {
+      outputWriter.write(Arrays.toString(trueDists));
+    }
+
+    IVFRNStats stats =
+            new IVFRNStats(
+                    1,
+                    1,
+                    1,
+                    1 / 1);
+    return new IVFRNResult(null, stats);
+  }
+
+    public IVFRNResult search(
       RandomAccessVectorValues.Floats dataVectors, float[] query, int k, int nProbe)
       throws IOException {
     // FIXME: FUTURE - implement fast scan and do a comparison
@@ -476,9 +557,11 @@ public class IVFRN {
 //        float rbqEst = OrC2 + QrC2 + fac[facCounter].factorPPC() * vl + (qcDist * 2 - sumQ) * fac[facCounter].factorIP() * width;
 
 //        rbqEst = rbqEst * 0.001f;
-        rbqEst = rbqEst / (float) Math.pow(Cnorm, 2);
+//        rbqEst = rbqEst / (float) Math.pow(Cnorm, 2);
 //        rbqEst = rbqEst / Cnorm; // <--- FIXME: This should be what rbqEst is???? and remove 275 below ... why doesn't that work!
 //        rbqEst = rbqEst * 0.0045215f;
+        rbqEst = rbqEst / (float) Math.pow(Qnorm, 2);  // <--- the correct thing to use???
+//        rbqEst = rbqEst / Qnorm;
         //FIXME: get the actual factor here by dividing rbq by tmpdist & scatterplot
 
         // TEMPORARY FACTORS - can precompute several of these
@@ -486,7 +569,7 @@ public class IVFRN {
         float OC = norm(subtract(O, C));
         float OdC = VectorUtil.dotProduct(O, C);
         float[] OmC = subtract(O, C);
-        float OdQdvQnorm = VectorUtil.dotProduct(O, QdQnorm);
+//        float OdQdvQnorm = VectorUtil.dotProduct(O, QdQnorm);
 
         // TARGET (footnote 8)
         // ⟨o, q⟩ = ∥o − c∥ · ∥q − c∥ · ⟨(o − c)/∥o − c∥, (q − c)/∥q − c∥ ⟩ + ⟨o, c⟩ + ⟨q, c⟩ − ∥c∥^2
@@ -501,7 +584,7 @@ public class IVFRN {
         reals[i] = tmpDist2;
         float tmpDist = OC * QC * rbqEst + OdC + QdC - (float) Math.pow(Cnorm, 2);  // ??% RECALL on 5 query vectors
 //        tmpDist = 175-tmpDist+100;
-        tmpDist = 275-tmpDist;
+        tmpDist = 2*QdC-tmpDist;
 //        tmpDist = scaleMaxInnerProductScore(tmpDist);
         tmpdists[i] = tmpDist;
 //        tmpDist = tmpDist2;

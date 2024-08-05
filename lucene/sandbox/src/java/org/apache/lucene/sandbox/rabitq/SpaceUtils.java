@@ -12,7 +12,7 @@ public class SpaceUtils {
   private static final VectorSpecies<Byte> BYTE_SPECIES = ByteVector.SPECIES_PREFERRED;
 
   // 𝐵𝑞 = Θ(log log𝐷)
-  public static final int B_QUERY = 4;
+  public static int B_QUERY = 4;
 
   public static int popcount(byte[] d, int B) {
     return BitSet.valueOf(d).cardinality();
