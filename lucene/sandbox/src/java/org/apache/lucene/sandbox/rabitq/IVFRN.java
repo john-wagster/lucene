@@ -418,7 +418,7 @@ public class IVFRN {
 
     // FIXME: FUTURE - don't use the Result class for this; it's confusing
     // FIXME: FUTURE - hardcoded
-    int maxEstimatorSize = 500;
+    int maxEstimatorSize = 50;
     PriorityQueue<Result> estimatorDistances =
             new PriorityQueue<>(maxEstimatorSize);
 
@@ -529,8 +529,8 @@ public class IVFRN {
 
         // FIXME: pull these out
         // TEMPORARY FACTORS - can precompute several of these
-//        float[] O = dataVectors.vectorValue(dataMapping[startC]+i);
-//        float[] OmC = subtract(O, C);
+        float[] O = dataVectors.vectorValue(dataMapping[startC]+i);
+        float[] OmC = subtract(O, C);
         float OC = OCs[dataMapping[i]];
         float OdC = OdCs[dataMapping[i]];
 
@@ -564,13 +564,14 @@ public class IVFRN {
 //        for(int w = 0; w < binaryCode[bCounter].length; w++) {
 //          xbSum += binaryCode[bCounter][w];
 //        }
-        float[] O = dataVectors.vectorValue(dataMapping[i]);
+//        float[] O = dataVectors.vectorValue(dataMapping[i]);
+        float[] OmCnorm = divide(OmC, norm(OmC));
 //        float[] OmC = subtract(O, C);
 //        float[] OmCn = divide(OmC, norm(OmC));
         float OOQ = 0f;
         for(int j = 0; j < O.length / 8; j++) {
           for(int r = 0; r < 8; r++) {
-            OOQ += (O[j*8+r] * (2f * ((binaryCode[bCounter][j] >> (7-r)) & 0b00000001) - 1f));
+            OOQ += (OmCnorm[j*8+r] * (2f * ((binaryCode[bCounter][j] >> (7-r)) & 0b00000001) - 1f));
           }
         }
         OOQ = OOQ / sqrtD;
