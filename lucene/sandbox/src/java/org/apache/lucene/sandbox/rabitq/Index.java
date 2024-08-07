@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.MMapDirectory;
+import org.apache.lucene.util.VectorUtil;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 public class Index {
@@ -52,9 +53,11 @@ public class Index {
       float[] distToCentroid = ivfOutput.distToCentroids();
       int[] clusterId = ivfOutput.clusterIds();
       byte[][] binary = subspaceOutput.repackedBinXP();
+      float[] OdCs = subspaceOutput.OdCs();
+      float[] OCs = subspaceOutput.OCs();
 
       System.out.println("Loading Complete!");
-      IVFRN ivf = new IVFRN(numDocs, centroids, distToCentroid, x0, clusterId, binary, dimensions);
+      IVFRN ivf = new IVFRN(numDocs, centroids, distToCentroid, x0, clusterId, binary, OdCs, OCs, dimensions);
 
       System.out.println("Saving");
       String indexPath = source + "ivfrabitq" + numCentroids + "_B" + B + ".index";
@@ -101,20 +104,24 @@ public class Index {
     float[] x0 = new float[XLength];
     byte[][] repackedBinXP = new byte[XLength][B / 8];
 
+    float[] OdCs = new float[XLength];
+    float[] OCs = new float[XLength];
     for (int i = 0; i < vectorValues.size(); i++) {
       float[] X = vectorValues.vectorValue(i);
       float[] XP = MatrixUtils.partialPadColumns(X, MAX_BD - D); // typically no-op if D/64
 
-      MatrixUtils.partialSubtract(XP, CP[clusterIds[i]]);
-      float[] XmC = XP;
+      OdCs[i] = VectorUtil.dotProduct(XP, CP[clusterIds[i]]);
 
+      MatrixUtils.partialSubtract(XP, CP[clusterIds[i]]);
       // The inner product between the data vector and the quantized data vector
       float norm = MatrixUtils.partialNormForRow(XP);
+      OCs[i] = norm;
       float[] XPSubset = MatrixUtils.partialSubset(XP, B); // typically no-op if D/64
       MatrixUtils.partialRemoveSignAndDivide(XPSubset, (float) Math.pow(B, 0.5));
       x0[i] = MatrixUtils.partialSumAndNormalize(XPSubset, norm);
       repackedBinXP[i] = MatrixUtils.partialRepackAsUInt64(XP, B);
+
     }
-    return new SubspaceOutput(CP, x0, repackedBinXP);
+    return new SubspaceOutput(CP, x0, repackedBinXP, OCs, OdCs);
   }
 }

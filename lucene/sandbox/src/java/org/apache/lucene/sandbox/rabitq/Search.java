@@ -187,7 +187,6 @@ public class Search {
     for (int i = 0; i < queryVectors.size(); i++) {
       long startTime = System.nanoTime();
       float[] queryVector = queryVectors.vectorValue(i);
-//      IVFRNResult resultf = ivf.indexToIndexTest(dataVectors, queryVector, k, nprobes);
       IVFRNResult result = ivf.search(dataVectors, queryVector, k, nprobes);
       PriorityQueue<Result> KNNs = result.results();
       IVFRNStats stats = result.stats();

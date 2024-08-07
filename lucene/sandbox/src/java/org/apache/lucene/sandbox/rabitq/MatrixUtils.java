@@ -76,9 +76,14 @@ public class MatrixUtils {
   }
 
   public static void partialSubtract(float[] a, float[] b) {
+    subtract(a, b, a);
+  }
+
+  public static float[] subtract(float[] a, float[] b, float[] result) {
     for (int j = 0; j < a.length; j++) {
-      a[j] -= b[j];
+      result[j] = a[j] - b[j];
     }
+    return result;
   }
 
   public static float[][] padColumns(float[][] a, int dimension) {
