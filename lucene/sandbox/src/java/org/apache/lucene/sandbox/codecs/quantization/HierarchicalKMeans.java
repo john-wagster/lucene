@@ -40,12 +40,12 @@ public class HierarchicalKMeans {
     KMeansResult kMeansResult = kMeansHierarchical(fieldInfo, new FloatVectorValuesSlice(vectors), targetSize, maxIterations, samplesPerCluster);
 
     if (kMeansResult.centroids().length > 1 && kMeansResult.centroids().length < vectors.size()) {
-      long startTimeLocalKmeans = System.nanoTime();
+//      long startTimeLocalKmeans = System.nanoTime();
 
       KMeansLocal.kMeansLocal(vectors, kMeansResult, clustersPerNeighborhood, maxIterations);
 
       // FIXME: remove me
-      System.out.println(" ==== local kmeans ms: " + (System.nanoTime() - startTimeLocalKmeans) / 1000000.0);
+//      System.out.println(" ==== local kmeans ms: " + (System.nanoTime() - startTimeLocalKmeans) / 1000000.0);
     }
 
     return kMeansResult;
