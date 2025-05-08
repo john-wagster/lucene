@@ -84,7 +84,7 @@ public class HierarchicalKMeans {
     float[][] centroids = kMeans.centroids();
 
     // FIXME: remove me
-    System.out.println(" ==== kmeans ms: " + (System.nanoTime() - startTime) / 1000000.0);
+//    System.out.println(" ==== kmeans ms: " + (System.nanoTime() - startTime) / 1000000.0);
 
     int[] clusterSizes = new int[centroids.length];
 
@@ -109,7 +109,7 @@ public class HierarchicalKMeans {
     }
 
     // FIXME: remove me
-    System.out.println(" ==== assignment ms: " + (System.nanoTime() - startTimeKmeans) / 1000000.0);
+//    System.out.println(" ==== assignment ms: " + (System.nanoTime() - startTimeKmeans) / 1000000.0);
 
     short effectiveK = 0;
     for(int i = 0; i < clusterSizes.length; i++) {
