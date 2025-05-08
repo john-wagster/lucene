@@ -37,7 +37,8 @@ public class HierarchicalKMeans {
     KMeansResult kMeansResult = kMeansHierarchical(new FloatVectorValuesSlice(vectors), targetSize);
 
     if (kMeansResult.centroids().length > 1 && kMeansResult.centroids().length < vectors.size()) {
-      KMeansLocal.kMeansLocal(vectors, kMeansResult, clustersPerNeighborhood, maxIterations);
+      // FIXME: should we do the same number of iterations here for minimally simplicity
+      KMeansLocal.kMeansLocal(vectors, kMeansResult, clustersPerNeighborhood, 8);
     }
 
     return kMeansResult;
