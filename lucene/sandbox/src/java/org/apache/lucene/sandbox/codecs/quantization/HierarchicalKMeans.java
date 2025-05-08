@@ -14,13 +14,15 @@ import java.io.IOException;
 public class HierarchicalKMeans {
 
   static final int MAXK = 128;
+  static final int MAX_ITERATIONS_DEFAULT = 6;
+  static final int SAMPLES_PER_CLUSTER_DEFAULT = 256;
 
   final int maxIterations;
   final int samplesPerCluster;
   final short clustersPerNeighborhood;
 
   public HierarchicalKMeans() {
-    this(8, 256, (short) MAXK);
+    this(MAX_ITERATIONS_DEFAULT, SAMPLES_PER_CLUSTER_DEFAULT, (short) MAXK);
   }
 
   public HierarchicalKMeans(int maxIterations,
@@ -31,11 +33,7 @@ public class HierarchicalKMeans {
     this.clustersPerNeighborhood = clustersPerNeighborhood;
   }
 
-  public KMeansResult cluster(FloatVectorValues vectors, int desiredClusters) throws IOException {
-//    int targetSize = (int) (vectors.size() / (float) desiredClusters);
-//    int targetSize = (int) (desiredClusters * 0.33f);
-    int targetSize = desiredClusters;
-
+  public KMeansResult cluster(FloatVectorValues vectors, int targetSize) throws IOException {
     KMeansResult kMeansResult = kMeansHierarchical(new FloatVectorValuesSlice(vectors), targetSize);
 
     if (kMeansResult.centroids().length > 1 && kMeansResult.centroids().length < vectors.size()) {
