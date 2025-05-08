@@ -32,8 +32,9 @@ public class HierarchicalKMeans {
   }
 
   public KMeansResult cluster(FloatVectorValues vectors, int desiredClusters) throws IOException {
-    int targetSize = (int) (vectors.size() / (float) desiredClusters);
+//    int targetSize = (int) (vectors.size() / (float) desiredClusters);
 //    int targetSize = (int) (desiredClusters * 0.33f);
+    int targetSize = desiredClusters;
 
     KMeansResult kMeansResult = kMeansHierarchical(new FloatVectorValuesSlice(vectors), targetSize);
 

@@ -274,8 +274,8 @@ public class DefaultIVFVectorsWriter extends IVFVectorsWriter {
 
     // FIXME: clean up magic numbers and get rid of desired clusters entirely?
     //  ... just use vectorPerCluster instead?
-    KMeansResult kMeansResult = new HierarchicalKMeans().cluster(floatVectorValues, (int) (desiredClusters * 0.66f));
-//    KMeansResult kMeansResult = new HierarchicalKMeans().cluster(fieldInfo, floatVectorValues, vectorPerCluster);
+//    KMeansResult kMeansResult = new HierarchicalKMeans().cluster(floatVectorValues, (int) (desiredClusters * 0.66f));
+    KMeansResult kMeansResult = new HierarchicalKMeans().cluster(floatVectorValues, vectorPerCluster);
 
     float[][] centroids = kMeansResult.centroids();
     short[] assignments = kMeansResult.assignments();
@@ -363,7 +363,7 @@ public class DefaultIVFVectorsWriter extends IVFVectorsWriter {
           idx++;
         }
       }
-//
+
 //      AssignmentArraySorter sorter = new AssignmentArraySorter(docIds, distances);
 //      sorter.sort(0, assignmentCount);
 
