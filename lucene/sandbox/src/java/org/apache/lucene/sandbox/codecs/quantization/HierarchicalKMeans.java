@@ -6,9 +6,7 @@
  */
 package org.apache.lucene.sandbox.codecs.quantization;
 
-import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FloatVectorValues;
-import org.apache.lucene.index.VectorSimilarityFunction;
 import org.apache.lucene.util.VectorUtil;
 
 import java.io.IOException;
@@ -25,38 +23,30 @@ public class HierarchicalKMeans {
     this(8, 256, (short) MAXK);
   }
 
-  public HierarchicalKMeans(final int maxIterations,
-                            final int samplesPerCluster,
-                            final short clustersPerNeighborhood) {
+  public HierarchicalKMeans(int maxIterations,
+                            int samplesPerCluster,
+                            short clustersPerNeighborhood) {
     this.maxIterations = maxIterations;
     this.samplesPerCluster = samplesPerCluster;
     this.clustersPerNeighborhood = clustersPerNeighborhood;
   }
 
-  public KMeansResult cluster(FieldInfo fieldInfo, FloatVectorValues vectors, int desiredClusters) throws IOException {
+  public KMeansResult cluster(FloatVectorValues vectors, int desiredClusters) throws IOException {
     int targetSize = (int) (vectors.size() / (float) desiredClusters);
 //    int targetSize = (int) (desiredClusters * 0.33f);
 
-    KMeansResult kMeansResult = kMeansHierarchical(fieldInfo, new FloatVectorValuesSlice(vectors), targetSize, maxIterations, samplesPerCluster);
+    KMeansResult kMeansResult = kMeansHierarchical(new FloatVectorValuesSlice(vectors), targetSize);
 
     if (kMeansResult.centroids().length > 1 && kMeansResult.centroids().length < vectors.size()) {
-//      long startTimeLocalKmeans = System.nanoTime();
-
       KMeansLocal.kMeansLocal(vectors, kMeansResult, clustersPerNeighborhood, maxIterations);
-
-      // FIXME: remove me
-//      System.out.println(" ==== local kmeans ms: " + (System.nanoTime() - startTimeLocalKmeans) / 1000000.0);
     }
 
     return kMeansResult;
 
   }
 
-  static KMeansResult kMeansHierarchical(final FieldInfo fieldInfo,
-                                         final FloatVectorValuesSlice vectors,
-                                         final int targetSize,
-                                         final int maxIterations,
-                                         final int samplesPerCluster) throws IOException {
+  KMeansResult kMeansHierarchical(final FloatVectorValuesSlice vectors,
+                                         final int targetSize) throws IOException {
     if (vectors.size() <= targetSize) {
       return new KMeansResult();
     }
@@ -64,10 +54,8 @@ public class HierarchicalKMeans {
     int k = Math.clamp((int)((vectors.size() + targetSize / 2.0f) / (float) targetSize), 2, MAXK);
     int m = Math.min(k * samplesPerCluster, vectors.size());
 
-    // FIXME: get rid of the recursion and when you do get rid of these as well and just reference the "parent" depth=0 level arrays only
+    // TODO: instead of creating a sub-cluster assignments reuse the parent array each time
     short[] assignments = new short[vectors.size()];
-
-    long startTime = System.nanoTime();
 
     final KMeans.Results kMeans =
       KMeans.cluster(
@@ -77,20 +65,15 @@ public class HierarchicalKMeans {
         42L,
         KMeans.KmeansInitializationMethod.FORGY,
         null,
-        fieldInfo.getVectorSimilarityFunction() == VectorSimilarityFunction.COSINE,
+        false,
         1,
         maxIterations,
         m);
     float[][] centroids = kMeans.centroids();
 
-    // FIXME: remove me
-//    System.out.println(" ==== kmeans ms: " + (System.nanoTime() - startTime) / 1000000.0);
-
     int[] clusterSizes = new int[centroids.length];
 
-    long startTimeKmeans = System.nanoTime();
-
-    // FIXME: consider adding cluster size counts to the kmeans algo?
+    // TODO: consider adding cluster size counts to the kmeans algo
     // handle assignment here so we can track distance and cluster size
     for(int i = 0; i < vectors.size(); i++) {
       float smallest = Float.MAX_VALUE;
@@ -107,9 +90,6 @@ public class HierarchicalKMeans {
       assignments[i] = centroidIdx;
       clusterSizes[centroidIdx]++;
     }
-
-    // FIXME: remove me
-//    System.out.println(" ==== assignment ms: " + (System.nanoTime() - startTimeKmeans) / 1000000.0);
 
     short effectiveK = 0;
     for(int i = 0; i < clusterSizes.length; i++) {
@@ -135,12 +115,10 @@ public class HierarchicalKMeans {
       if (100 * clusterSizes[c] > 134 * targetSize) {
         FloatVectorValuesSlice sample = createClusterSlice(clusterSizes[c], c, vectors, assignments);
 
-        // FIXME: rewrite this without recursion and keep a stack of the fvv slices
+        // TODO: consider iterative here instead of recursive
         updateAssignmentsWithRecursiveSplit(
-          kMeansResult, c, kMeansHierarchical(
-            fieldInfo, sample, targetSize,
-            maxIterations, samplesPerCluster
-          )
+          kMeansResult, c,
+          kMeansHierarchical(sample, targetSize)
         );
       }
     }
@@ -189,5 +167,4 @@ public class HierarchicalKMeans {
       }
     }
   }
-
 }

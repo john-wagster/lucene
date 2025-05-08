@@ -17,6 +17,10 @@ import java.util.List;
 
 public final class KMeansLocal {
 
+  KMeansLocal() {
+    // FIXME: move class level params out of kmeanslocal function
+  }
+
   private static void computeNeighborhoods(float[][] centers,
                                            List<int[]> neighborhoods, // Modified in place
                                            int clustersPerNeighborhood) {

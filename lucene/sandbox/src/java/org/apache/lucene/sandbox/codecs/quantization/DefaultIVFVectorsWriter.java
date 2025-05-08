@@ -274,7 +274,7 @@ public class DefaultIVFVectorsWriter extends IVFVectorsWriter {
 
     // FIXME: clean up magic numbers and get rid of desired clusters entirely?
     //  ... just use vectorPerCluster instead?
-    KMeansResult kMeansResult = new HierarchicalKMeans().cluster(fieldInfo, floatVectorValues, (int) (desiredClusters * 0.66f));
+    KMeansResult kMeansResult = new HierarchicalKMeans().cluster(floatVectorValues, (int) (desiredClusters * 0.66f));
 //    KMeansResult kMeansResult = new HierarchicalKMeans().cluster(fieldInfo, floatVectorValues, vectorPerCluster);
 
     float[][] centroids = kMeansResult.centroids();
@@ -351,20 +351,21 @@ public class DefaultIVFVectorsWriter extends IVFVectorsWriter {
         }
       }
 
+      // FIXME: add back in sorting
       int[] docIds = new int[assignmentCount];
-      float[] distances = new float[assignmentCount];
+//      float[] distances = new float[assignmentCount];
       int idx = 0;
       for(int j = 0; j < assignments.length; j++) {
         if(assignments[j] == i) {
-          float d = VectorUtil.squareDistance(floatVectorValues.vectorValue(j), centroid);
-          docIds[idx] = j;
-          distances[idx] = d;
+//          float d = VectorUtil.squareDistance(floatVectorValues.vectorValue(j), centroid);
+          docIds[idx] = floatVectorValues.ordToDoc(j);
+//          distances[idx] = d;
           idx++;
         }
       }
-
-      AssignmentArraySorter sorter = new AssignmentArraySorter(docIds, distances);
-      sorter.sort(0, assignmentCount);
+//
+//      AssignmentArraySorter sorter = new AssignmentArraySorter(docIds, distances);
+//      sorter.sort(0, assignmentCount);
 
       // TODO align???
       offsets[i] = postingsOutput.getFilePointer();
