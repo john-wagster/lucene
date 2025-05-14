@@ -42,40 +42,7 @@ public class HierarchicalKMeans {
     }
 
     return kMeansResult;
-
   }
-
-//  bool stepLloyd(std::size_t nd,
-//                 std::size_t dim,
-//               const Dataset& dataset,
-//                 Centers& centers,
-//                 Centers& nextCenters,
-//                 std::vector<std::size_t>& q,
-//                 std::vector<std::size_t>& a) {
-//
-//    bool changed{false};
-//
-//    nextCenters.assign(centers.size(), 0.0F);
-//    q.assign(centers.size() / dim, 0);
-//
-//    for (std::size_t i = 0, id = 0; id < nd; ++i, id += dim) {
-//      std::size_t bestJd{0};
-//      float minDsq{INF};
-//      for (std::size_t jd = 0; jd < centers.size(); jd += dim) {
-//        float dsq{distanceSq(dim, &dataset[id], &centers[jd])};
-//        if (dsq < minDsq) {
-//          minDsq = dsq;
-//          bestJd = jd;
-//        }
-//      }
-//      changed |= (a[i] != bestJd);
-//      a[i] = bestJd;
-//      ++q[bestJd / dim];
-//        #pragma omp simd
-//      for (std::size_t d = 0; d < dim; ++d) {
-//        nextCenters[bestJd + d] += dataset[id + d];
-//      }
-//    }
 
   KMeansResult kMeansHierarchical(final FloatVectorValuesSlice vectors,
                                          final int targetSize) throws IOException {

@@ -270,11 +270,7 @@ public class DefaultIVFVectorsWriter extends IVFVectorsWriter {
     if (floatVectorValues.size() == 0) {
       return new CentroidAssignments(0, new short[0], new short[0]);
     }
-    int desiredClusters = ((floatVectorValues.size() - 1) / vectorPerCluster) + 1;
 
-    // FIXME: clean up magic numbers and get rid of desired clusters entirely?
-    //  ... just use vectorPerCluster instead?
-//    KMeansResult kMeansResult = new HierarchicalKMeans().cluster(floatVectorValues, (int) (desiredClusters * 0.66f));
     KMeansResult kMeansResult = new HierarchicalKMeans().cluster(floatVectorValues, vectorPerCluster);
 
     float[][] centroids = kMeansResult.centroids();
