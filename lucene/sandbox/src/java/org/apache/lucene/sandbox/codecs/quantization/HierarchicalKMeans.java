@@ -45,6 +45,38 @@ public class HierarchicalKMeans {
 
   }
 
+//  bool stepLloyd(std::size_t nd,
+//                 std::size_t dim,
+//               const Dataset& dataset,
+//                 Centers& centers,
+//                 Centers& nextCenters,
+//                 std::vector<std::size_t>& q,
+//                 std::vector<std::size_t>& a) {
+//
+//    bool changed{false};
+//
+//    nextCenters.assign(centers.size(), 0.0F);
+//    q.assign(centers.size() / dim, 0);
+//
+//    for (std::size_t i = 0, id = 0; id < nd; ++i, id += dim) {
+//      std::size_t bestJd{0};
+//      float minDsq{INF};
+//      for (std::size_t jd = 0; jd < centers.size(); jd += dim) {
+//        float dsq{distanceSq(dim, &dataset[id], &centers[jd])};
+//        if (dsq < minDsq) {
+//          minDsq = dsq;
+//          bestJd = jd;
+//        }
+//      }
+//      changed |= (a[i] != bestJd);
+//      a[i] = bestJd;
+//      ++q[bestJd / dim];
+//        #pragma omp simd
+//      for (std::size_t d = 0; d < dim; ++d) {
+//        nextCenters[bestJd + d] += dataset[id + d];
+//      }
+//    }
+
   KMeansResult kMeansHierarchical(final FloatVectorValuesSlice vectors,
                                          final int targetSize) throws IOException {
     if (vectors.size() <= targetSize) {
@@ -75,6 +107,8 @@ public class HierarchicalKMeans {
 
     // TODO: consider adding cluster size counts to the kmeans algo
     // handle assignment here so we can track distance and cluster size
+    int[] centroidVectorCount = new int[centroids.length];
+    float[][] nextCentroids = new float[centroids.length][vectors.dimension()];
     for(int i = 0; i < vectors.size(); i++) {
       float smallest = Float.MAX_VALUE;
       short centroidIdx = -1;
@@ -87,8 +121,21 @@ public class HierarchicalKMeans {
           centroidIdx = j;
         }
       }
+      centroidVectorCount[centroidIdx]++;
+      for(int j = 0; j < vectors.dimension(); j++) {
+        nextCentroids[centroidIdx][j] += vector[j];
+      }
       assignments[i] = centroidIdx;
       clusterSizes[centroidIdx]++;
+    }
+
+    // update centroids based on assignments of all vectors
+    for(int i = 0; i < centroids.length; i++) {
+      if(centroidVectorCount[i] > 0) {
+        for(int j = 0; j < vectors.dimension(); j++) {
+          centroids[i][j] = nextCentroids[i][j] / centroidVectorCount[i];
+        }
+      }
     }
 
     short effectiveK = 0;
