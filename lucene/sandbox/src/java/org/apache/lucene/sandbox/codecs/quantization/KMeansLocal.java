@@ -54,63 +54,48 @@ public final class KMeansLocal {
 
   private static boolean stepLloyd(FloatVectorValues dataset,
                                    List<int[]> neighborhoods,
-                                   float[][] centers,
-                                   float[][] nextCenters,
-                                   long[] centerCounts,
-                                   short[] assignments) throws IOException {
+                                   float[][] centroids,
+                                   short[] assignments,
+                                   int sampleSize) throws IOException {
 
     boolean changed = false;
-    int dim = centers[0].length;
-    int k = centerCounts.length;
-    int n = assignments.length;
+    int dim = centroids[0].length;
 
-    Arrays.fill(centerCounts, 0L);
-    for(int i = 0; i < nextCenters.length; i++) {
-      for(int j = 0; j < nextCenters[0].length; j++) {
-        nextCenters[i][j] = 0.0f;
-      }
-    }
+    long[] centroidCounts = new long[centroids.length];
 
-    for (int i = 0; i < n; i++) {
+    float[][] nextCenters = new float[centroids.length][centroids[0].length];
+
+    for (int i = 0; i < sampleSize; i++) {
       float[] vector = dataset.vectorValue(i);
       short currentClusterIndex = assignments[i];
       int bestCenterOffset = currentClusterIndex;
 
-      float minDsq = VectorUtil.squareDistance(vector, centers[currentClusterIndex]);
+      float minDsq = VectorUtil.squareDistance(vector, centroids[currentClusterIndex]);
 
-      if (currentClusterIndex < neighborhoods.size()) {
-        int[] neighborOffsets = neighborhoods.get(currentClusterIndex);
-        if (neighborOffsets != null) {
-          for (int neighborOffset : neighborOffsets) {
-            if (neighborOffset >= 0 && neighborOffset <= centers.length) {
-              float dsq = VectorUtil.squareDistance(vector, centers[neighborOffset]);
-              if (dsq < minDsq) {
-                minDsq = dsq;
-                bestCenterOffset = neighborOffset;
-              }
-            }
+      int[] neighborOffsets = neighborhoods.get(currentClusterIndex);
+      for (int neighborOffset : neighborOffsets) {
+          float dsq = VectorUtil.squareDistance(vector, centroids[neighborOffset]);
+          if (dsq < minDsq) {
+            minDsq = dsq;
+            bestCenterOffset = neighborOffset;
           }
-        }
+
       }
       if (assignments[i] != bestCenterOffset) {
         changed = true;
       }
       assignments[i] = (short) bestCenterOffset;
-
-      // FIXME: always true?
-      if (bestCenterOffset >= 0 && bestCenterOffset <= centers.length) {
-        centerCounts[bestCenterOffset]++;
-        for (short d = 0; d < dim; d++) {
-          nextCenters[bestCenterOffset][d] += vector[d];
-        }
+      centroidCounts[bestCenterOffset]++;
+      for (short d = 0; d < dim; d++) {
+        nextCenters[bestCenterOffset][d] += vector[d];
       }
     }
 
-    for (int clusterIdx = 0; clusterIdx < k; clusterIdx++) {
-      if (centerCounts[clusterIdx] > 0) {
-        float countF = (float) centerCounts[clusterIdx];
+    for (int clusterIdx = 0; clusterIdx < centroids.length; clusterIdx++) {
+      if (centroidCounts[clusterIdx] > 0) {
+        float countF = (float) centroidCounts[clusterIdx];
         for (int d = 0; d < dim; d++) {
-          centers[clusterIdx][d] = nextCenters[clusterIdx][d] / countF;
+          centroids[clusterIdx][d] = nextCenters[clusterIdx][d] / countF;
         }
       }
     }
@@ -174,10 +159,11 @@ public final class KMeansLocal {
     return dsq + lambda * rproj * rproj / rnorm;
   }
 
-  public static KMeansResult kMeansLocal(FloatVectorValues dataset,
-                                         KMeansResult kMeansResult,
-                                             short clustersPerNeighborhood,
-                                             int maxIterations) throws IOException {
+  public static void kMeansLocal(FloatVectorValues dataset,
+                                 KMeansResult kMeansResult,
+                                 short clustersPerNeighborhood,
+                                 int maxIterations,
+                                 int sampleSize) throws IOException {
     final float[][] centroids = kMeansResult.centroids();
     final short[] assignments = kMeansResult.assignments();
     int k = centroids.length;
@@ -189,19 +175,13 @@ public final class KMeansLocal {
 
     computeNeighborhoods(centroids, neighborhoods, clustersPerNeighborhood);
 
-    long[] centroidCounts = new long[k];
-    float[][] nextCenters = new float[centroids.length][centroids[0].length];
-
-    int iterationsRun;
-    for (iterationsRun = 0; iterationsRun < maxIterations; iterationsRun++) {
-      boolean changed = stepLloyd(dataset, neighborhoods, centroids, nextCenters, centroidCounts, assignments);
-      if (!changed) {
+    for (int iterationsRun = 0; iterationsRun < maxIterations; iterationsRun++) {
+      if(!stepLloyd(dataset, neighborhoods, centroids, assignments, sampleSize)) {
         break;
       }
     }
+    stepLloyd(dataset, neighborhoods, centroids, assignments, dataset.size());
 
     kMeansResult.setSoarAssignments(assignSpilled(dataset, neighborhoods, centroids, assignments));
-
-    return kMeansResult;
   }
 }
