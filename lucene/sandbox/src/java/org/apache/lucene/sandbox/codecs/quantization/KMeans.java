@@ -123,12 +123,13 @@ public class KMeans {
     }
     // adjust sampleSize and numClusters
     sampleSize = Math.max(sampleSize, 100 * numClusters);
-    if (sampleSize > vectors.size()) {
-      sampleSize = vectors.size();
-      // Decrease the number of clusters if needed
-      int maxNumClusters = Math.max(1, sampleSize / 100);
-      numClusters = Math.min(numClusters, maxNumClusters);
-    }
+    // FIXME: remove this logic or rewrite a kmeans specific to hkmeans
+//    if (sampleSize > vectors.size()) {
+//      sampleSize = vectors.size();
+//      // Decrease the number of clusters if needed
+//      int maxNumClusters = Math.max(1, sampleSize / 100);
+//      numClusters = Math.min(numClusters, maxNumClusters);
+//    }
 
     Random random = new Random(seed);
     float[][] centroids;
