@@ -87,28 +87,32 @@ public class DefaultIVFVectorsWriter extends IVFVectorsWriter {
       };
     }
     // calculate the centroids
-    int maxNumClusters = ((floatVectorValues.size() - 1) / vectorPerCluster) + 1;
-    int desiredClusters =
-        (int)
-            Math.max(
-                maxNumClusters / 16.0,
-                Math.max(Math.sqrt(floatVectorValues.size()), maxNumClusters));
-    if (floatVectorValues.size() / desiredClusters > vectorPerCluster) {
-      desiredClusters = ((floatVectorValues.size() - 1) / vectorPerCluster) + 1;
-    }
-    final KMeans.Results kMeans =
-        KMeans.cluster(
-            floatVectorValues,
-            desiredClusters,
-            false,
-            42L,
-            KMeans.KmeansInitializationMethod.PLUS_PLUS,
-            null,
-            fieldInfo.getVectorSimilarityFunction() == VectorSimilarityFunction.COSINE,
-            1,
-            15,
-            desiredClusters * 256);
-    float[][] centroids = kMeans.centroids();
+//    int maxNumClusters = ((floatVectorValues.size() - 1) / vectorPerCluster) + 1;
+//    int desiredClusters =
+//        (int)
+//            Math.max(
+//                maxNumClusters / 16.0,
+//                Math.max(Math.sqrt(floatVectorValues.size()), maxNumClusters));
+//    if (floatVectorValues.size() / desiredClusters > vectorPerCluster) {
+//      desiredClusters = ((floatVectorValues.size() - 1) / vectorPerCluster) + 1;
+//    }
+//    final KMeans.Results kMeans =
+//        KMeans.cluster(
+//            floatVectorValues,
+//            desiredClusters,
+//            false,
+//            42L,
+//            KMeans.KmeansInitializationMethod.PLUS_PLUS,
+//            null,
+//            fieldInfo.getVectorSimilarityFunction() == VectorSimilarityFunction.COSINE,
+//            1,
+//            15,
+//            desiredClusters * 256);
+//    float[][] centroids = kMeans.centroids();
+
+    KMeansResult kMeansResult = new HierarchicalKMeans().cluster(floatVectorValues, vectorPerCluster);
+    float[][] centroids = kMeansResult.centroids();
+
     // write them
     writeCentroids(centroids, fieldInfo, globalCentroid, centroidOutput);
     return new OnHeapCentroidAssignmentScorer(centroids);
