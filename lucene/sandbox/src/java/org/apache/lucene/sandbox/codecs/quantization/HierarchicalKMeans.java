@@ -57,19 +57,23 @@ public class HierarchicalKMeans {
     // TODO: instead of creating a sub-cluster assignments reuse the parent array each time
     short[] assignments = new short[vectors.size()];
 
-    final KMeans.Results kMeans =
-      KMeans.cluster(
-        vectors,
-        k,
-        false,
-        42L,
-        KMeans.KmeansInitializationMethod.FORGY,
-        null,
-        false,
-        1,
-        2 * maxIterations,
-        m);
-    float[][] centroids = kMeans.centroids();
+//    final KMeans.Results kMeans =
+//      KMeans.cluster(
+//        vectors,
+//        k,
+//        false,
+//        42L,
+//        KMeans.KmeansInitializationMethod.FORGY,
+//        null,
+//        false,
+//        1,
+//        2 * maxIterations,
+//        m);
+//    float[][] centroids = kMeans.centroids();
+    // FIXME: clean up this usage
+    HKMeans hkMeans = new HKMeans();
+    float[][] centroids = hkMeans.pickInitialCentroids(vectors, m, k);
+    hkMeans.cluster(vectors, m, centroids, maxIterations);
 
     int[] clusterSizes = new int[centroids.length];
 
