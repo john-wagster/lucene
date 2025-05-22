@@ -128,7 +128,7 @@ public abstract class IVFVectorsWriter extends KnnVectorsWriter {
       CentroidAssignments centroidAssignments)
       throws IOException;
 
-  protected abstract IVFUtils.CentroidAssignmentScorer calculateAndWriteCentroids(
+  protected abstract HeavyCentroidAssignments calculateAndWriteCentroids(
       FieldInfo fieldInfo,
       FloatVectorValues floatVectorValues,
       IndexOutput centroidOutput,
@@ -138,7 +138,7 @@ public abstract class IVFVectorsWriter extends KnnVectorsWriter {
   protected abstract long[] buildAndWritePostingsLists(
       FieldInfo fieldInfo,
       InfoStream infoStream,
-      IVFUtils.CentroidAssignmentScorer scorer,
+      HeavyCentroidAssignments centroidAssignments,
       FloatVectorValues floatVectorValues,
       IndexOutput postingsOutput)
       throws IOException;
@@ -158,15 +158,19 @@ public abstract class IVFVectorsWriter extends KnnVectorsWriter {
           getFloatVectorValues(fieldWriter.fieldInfo, fieldWriter.delegate, maxDoc);
       // build centroids
       long centroidOffset = ivfCentroids.alignFilePointer(Float.BYTES);
-      final IVFUtils.CentroidAssignmentScorer centroidAssignmentScorer =
+
+      // FIXME: clean this up
+      final HeavyCentroidAssignments centroidAssignments =
           calculateAndWriteCentroids(
               fieldWriter.fieldInfo, floatVectorValues, ivfCentroids, globalCentroid);
+
       long centroidLength = ivfCentroids.getFilePointer() - centroidOffset;
       final long[] offsets =
+        // FIXME: clean up this function definition to be more consistent with the other one
           buildAndWritePostingsLists(
               fieldWriter.fieldInfo,
               segmentWriteState.infoStream,
-              centroidAssignmentScorer,
+              centroidAssignments,
               floatVectorValues,
               ivfClusters);
       // write posting lists

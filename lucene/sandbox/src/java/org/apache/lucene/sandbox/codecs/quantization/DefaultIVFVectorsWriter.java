@@ -57,35 +57,35 @@ public class DefaultIVFVectorsWriter extends IVFVectorsWriter {
   }
 
   @Override
-  protected IVFUtils.CentroidAssignmentScorer calculateAndWriteCentroids(
+  protected HeavyCentroidAssignments calculateAndWriteCentroids(
       FieldInfo fieldInfo,
       FloatVectorValues floatVectorValues,
       IndexOutput centroidOutput,
       float[] globalCentroid)
       throws IOException {
-    if (floatVectorValues.size() == 0) {
-      return new IVFUtils.CentroidAssignmentScorer() {
-        @Override
-        public int size() {
-          return 0;
-        }
-
-        @Override
-        public float[] centroid(int centroidOrdinal) {
-          throw new IllegalStateException("No centroids");
-        }
-
-        @Override
-        public float score(int centroidOrdinal) {
-          throw new IllegalStateException("No centroids");
-        }
-
-        @Override
-        public void setScoringVector(float[] vector) {
-          throw new IllegalStateException("No centroids");
-        }
-      };
-    }
+//    if (floatVectorValues.size() == 0) {
+//      return new IVFUtils.CentroidAssignmentScorer() {
+//        @Override
+//        public int size() {
+//          return 0;
+//        }
+//
+//        @Override
+//        public float[] centroid(int centroidOrdinal) {
+//          throw new IllegalStateException("No centroids");
+//        }
+//
+//        @Override
+//        public float score(int centroidOrdinal) {
+//          throw new IllegalStateException("No centroids");
+//        }
+//
+//        @Override
+//        public void setScoringVector(float[] vector) {
+//          throw new IllegalStateException("No centroids");
+//        }
+//      };
+//    }
     // calculate the centroids
 //    int maxNumClusters = ((floatVectorValues.size() - 1) / vectorPerCluster) + 1;
 //    int desiredClusters =
@@ -112,52 +112,111 @@ public class DefaultIVFVectorsWriter extends IVFVectorsWriter {
 
     KMeansResult kMeansResult = new HierarchicalKMeans().cluster(floatVectorValues, vectorPerCluster);
     float[][] centroids = kMeansResult.centroids();
+    short[] assignments = kMeansResult.assignments();
+    short[] soarAssignments = kMeansResult.soarAssignments();
 
     // write them
     writeCentroids(centroids, fieldInfo, globalCentroid, centroidOutput);
-    return new OnHeapCentroidAssignmentScorer(centroids);
+    return new HeavyCentroidAssignments(centroids, assignments, soarAssignments);
   }
 
   @Override
   protected long[] buildAndWritePostingsLists(
       FieldInfo fieldInfo,
       InfoStream infoStream,
-      IVFUtils.CentroidAssignmentScorer randomCentroidScorer,
+      HeavyCentroidAssignments centroidAssignments,
       FloatVectorValues floatVectorValues,
       IndexOutput postingsOutput)
       throws IOException {
-    IntArrayList[] clusters = new IntArrayList[randomCentroidScorer.size()];
-    for (int i = 0; i < randomCentroidScorer.size(); i++) {
-      clusters[i] = new IntArrayList(floatVectorValues.size() / randomCentroidScorer.size() / 4);
-    }
-    assignCentroids(randomCentroidScorer, floatVectorValues, clusters);
-    if (infoStream.isEnabled(IVF_VECTOR_COMPONENT)) {
-      printClusterQualityStatistics(clusters, infoStream);
-    }
+
+//    IntArrayList[] clusters = new IntArrayList[randomCentroidScorer.size()];
+//    for (int i = 0; i < randomCentroidScorer.size(); i++) {
+//      clusters[i] = new IntArrayList(floatVectorValues.size() / randomCentroidScorer.size() / 4);
+//    }
+//    assignCentroids(randomCentroidScorer, floatVectorValues, clusters);
+//    if (infoStream.isEnabled(IVF_VECTOR_COMPONENT)) {
+//      printClusterQualityStatistics(clusters, infoStream);
+//    }
     // write the posting lists
-    final long[] offsets = new long[randomCentroidScorer.size()];
+    final long[] offsets = new long[centroidAssignments.centroids().length];
     OptimizedScalarQuantizer quantizer =
         new OptimizedScalarQuantizer(fieldInfo.getVectorSimilarityFunction());
     BinarizedFloatVectorValues binarizedByteVectorValues =
         new BinarizedFloatVectorValues(floatVectorValues, quantizer);
     DocIdsWriter docIdsWriter = new DocIdsWriter();
-    for (int i = 0; i < randomCentroidScorer.size(); i++) {
-      float[] centroid = randomCentroidScorer.centroid(i);
+
+    long startTime = System.nanoTime();
+
+    int[][] clustersForMetrics = new int[centroidAssignments.centroids().length][];
+
+    short[] assignments = centroidAssignments.assignments();
+    short[] soarAssignments = centroidAssignments.soarAssignments();
+
+    for (int i = 0; i < centroidAssignments.centroids().length; i++) {
+      float[] centroid = centroidAssignments.centroids()[i];
+//      binarizedByteVectorValues.centroid = centroid;
+//      // TODO sort by distance to the centroid
+//      IntArrayList cluster = clusters[i];
+
       binarizedByteVectorValues.centroid = centroid;
-      // TODO sort by distance to the centroid
-      IntArrayList cluster = clusters[i];
+
+      int assignmentCount = 0;
+      for(int j = 0; j < assignments.length; j++) {
+        if(assignments[j] == i) {
+          assignmentCount++;
+        }
+      }
+      for(int j = 0; j < soarAssignments.length; j++) {
+        if(assignments[j] == i) {
+          assignmentCount++;
+        }
+      }
+
+      // FIXME: add back in sorting
+      int[] docIds = new int[assignmentCount];
+//      float[] distances = new float[assignmentCount];
+      int idx = 0;
+      for(int j = 0; j < assignments.length; j++) {
+        if(assignments[j] == i) {
+//          float d = VectorUtil.squareDistance(floatVectorValues.vectorValue(j), centroid);
+          docIds[idx] = floatVectorValues.ordToDoc(j);
+//          distances[idx] = d;
+          idx++;
+        }
+      }
+
+//      AssignmentArraySorter sorter = new AssignmentArraySorter(docIds, distances);
+//      sorter.sort(0, assignmentCount);
+
       // TODO align???
       offsets[i] = postingsOutput.getFilePointer();
-      int size = cluster.size();
+      int size = assignmentCount;
       postingsOutput.writeVInt(size);
       postingsOutput.writeInt(Float.floatToIntBits(VectorUtil.dotProduct(centroid, centroid)));
       // TODO we might want to consider putting the docIds in a separate file
       //  to aid with only having to fetch vectors from slower storage when they are required
       //  keeping them in the same file indicates we pull the entire file into cache
-      docIdsWriter.writeDocIds(
-          j -> floatVectorValues.ordToDoc(cluster.get(j)), cluster.size(), postingsOutput);
-      writePostingList(cluster, postingsOutput, binarizedByteVectorValues);
+//      docIdsWriter.writeDocIds(
+//          j -> floatVectorValues.ordToDoc(cluster.get(j)), assignmentCount, postingsOutput);
+//      writePostingList(cluster, postingsOutput, binarizedByteVectorValues);
+      docIdsWriter.writeDocIds(ordIdx -> docIds[ordIdx], size, postingsOutput);
+
+      // TODO: support a writepostinglist with an int[] instead of wrapping it
+      writePostingList(IntArrayList.from(docIds), postingsOutput, binarizedByteVectorValues);
+
+      if (infoStream.isEnabled(IVF_VECTOR_COMPONENT)) {
+        clustersForMetrics[i] = docIds;
+      }
     }
+
+    // FIXME: remove me
+    System.out.println(" ==== sorting ms: " + (System.nanoTime() - startTime) / 1000000.0);
+
+    // FIXME: -bring this back- clean up the usages of this print quality stats function
+    if (infoStream.isEnabled(IVF_VECTOR_COMPONENT)) {
+      printClusterQualityStatistics2(clustersForMetrics, infoStream);
+    }
+
     return offsets;
   }
 

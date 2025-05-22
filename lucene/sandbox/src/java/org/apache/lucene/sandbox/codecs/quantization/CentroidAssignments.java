@@ -10,3 +10,8 @@ record CentroidAssignments(
   int numCentroids,
   short[] assignments,
   short[] soarAssignments) {}
+
+record HeavyCentroidAssignments(
+  float[][] centroids,
+  short[] assignments,
+  short[] soarAssignments) {}
